@@ -74,7 +74,6 @@
     <p>1533区 菜狗 友情提供</p>
 
     <h3>玩家 ID 列表</h3>
-    <input type="text" id="fidName" placeholder="玩家名称">
     <input type="text" id="fid" placeholder="玩家 FID">
     <button onclick="addFID()">添加玩家</button>
     <ul id="fidList"></ul>
@@ -144,15 +143,29 @@
         });
     }
 
-    function addFID() {
-        let name = document.getElementById("fidName").value.trim();
+    async function addFID() {
+        // let name = document.getElementById("fidName").value.trim();
         let fid = document.getElementById("fid").value.trim();
-        if (name && fid) {
+        let resultArea = document.getElementById("result");
+        if (fid) {
+            let loginResponse = await fetch(apiLogin, {
+                method: "POST",
+                headers: {"Content-Type": "application/x-www-form-urlencoded"},
+                body: new URLSearchParams(generateSign({fid, time: Date.now()}))
+            }).then(res => res.json());
+
+            if (loginResponse.msg !== "success") {
+                resultArea.value += `❌ [登录失败] ${fid}: ${loginResponse.msg}\n`;
+                return;
+            }
+
+            let nickName = loginResponse.data.nickname;
+            resultArea.value += `✅ [登录成功] ${nickName} (${fid})\n`;
             let data = loadData();
-            data.fids.push(`${name} (${fid})`);
+            data.fids.push(`${nickName} (${fid})`);
             saveData(data);
             renderLists();
-            document.getElementById("fidName").value = "";
+            // document.getElementById("fidName").value = "";
             document.getElementById("fid").value = "";
         }
     }
