@@ -1,245 +1,841 @@
 <!DOCTYPE html>
 <html lang="zh">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>无尽冬日 - 礼包兑换</title>
+    <meta charset="UTF-8"/>
+    <title>Grid Map Editor - 完整版（支持撤销/重做）</title>
+    <meta name="viewport" content="width=device-width,initial-scale=1"/>
     <style>
-        body {
-            font-family: Arial, sans-serif;
-            background-color: #121212;
-            color: #fff;
+        :root {
+            --toolbar-width: 320px;
+        }
+
+        html, body {
+            height: 100%;
             margin: 0;
-            padding: 20px;
-            text-align: center;
         }
-        .container {
-            max-width: 600px;
-            margin: auto;
-            background: #1e1e1e;
-            padding: 20px;
-            border-radius: 8px;
+
+        body {
+            font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial;
+            display: flex;
+            height: 100vh;
+            overflow: hidden;
         }
-        h2 {
-            margin-bottom: 10px;
+
+        #toolbar {
+            width: var(--toolbar-width);
+            box-sizing: border-box;
+            padding: 12px;
+            background: #f5f7fa;
+            border-right: 1px solid #d8dbe0;
+            overflow: auto;
         }
-        input, button {
-            padding: 10px;
-            margin: 5px;
+
+        #mapContainer {
+            flex: 1;
+            position: relative;
+            background: #e6e9ef;
+        }
+
+        canvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+            background: #fff;
+            cursor: crosshair;
+        }
+
+        h3 {
+            margin: 8px 0;
             font-size: 16px;
         }
+
+        label {
+            display: block;
+            margin: 6px 0;
+            font-size: 13px;
+        }
+
+        input[type="number"], input[type="text"], select {
+            padding: 6px;
+            border-radius: 6px;
+            border: 1px solid #cfd6df;
+        }
+
         button {
-            background-color: #6200ea;
-            color: white;
-            border: none;
+            display: inline-block;
+            margin: 6px 6px 6px 0;
+            padding: 6px 10px;
+            border-radius: 6px;
+            border: 1px solid #cfd6df;
+            background: #fff;
             cursor: pointer;
-            border-radius: 4px;
         }
-        button:hover {
-            background-color: #3700b3;
+
+        .preset-item {
+            border: 1px solid #d0d6dd;
+            padding: 8px;
+            margin-bottom: 8px;
+            background: #fff;
+            cursor: grab;
+            user-select: none;
         }
-        ul {
-            list-style: none;
-            padding: 0;
-        }
-        li {
-            background: #333;
-            padding: 10px;
-            margin: 5px 0;
-            border-radius: 4px;
+
+        .row {
             display: flex;
-            justify-content: space-between;
+            gap: 6px;
+            align-items: center;
         }
-        .remove {
-            cursor: pointer;
-            color: red;
+
+        .small {
+            font-size: 12px;
+            padding: 4px 8px;
         }
-        textarea {
-            width: 100%;
-            height: 150px;
-            margin-top: 10px;
-            background: #222;
-            color: #fff;
-            border: none;
-            padding: 10px;
-            font-size: 14px;
-            resize: none;
+
+        .muted {
+            color: #6b7280;
+            font-size: 12px;
+        }
+
+        .stack {
+            display: flex;
+            gap: 6px;
+            flex-wrap: wrap;
+            margin-bottom: 8px;
+        }
+
+        .controls {
+            margin-bottom: 12px;
         }
     </style>
 </head>
 <body>
+<div id="toolbar">
+    <h3>画布设置</h3>
+    <label>宽度（格）: <input id="mapWidth" type="number" value="80" min="4" max="300" style="width:90px"></label>
+    <label>高度（格）: <input id="mapHeight" type="number" value="80" min="4" max="300" style="width:90px"></label>
+    <label>格子像素: <input id="cellSizeInput" type="number" value="16" min="4" max="128" style="width:90px"></label>
+    <div class="stack">
+        <button onclick="applyCanvasSize()">应用尺寸</button>
+        <button onclick="resetView()" title="重置缩放和平移">重置视图</button>
+    </div>
 
-<div class="container">
-    <h2>🎁 无尽冬日 - 礼包兑换</h2>
-    <p>1533区 菜狗 友情提供</p>
+    <h3>工具</h3>
+    <div class="stack controls">
+        <button onclick="toggleGrid()" id="btnGrid">网格</button>
+        <button onclick="clearMap()" id="btnClear">清空</button>
+    </div>
 
-    <h3>玩家 ID 列表</h3>
-    <input type="text" id="fid" placeholder="玩家 FID">
-    <button onclick="addFID()">添加玩家</button>
-    <ul id="fidList"></ul>
+    <div class="stack">
+        <button onclick="undo()" title="撤销 (Ctrl+Z)">撤销</button>
+        <button onclick="redo()" title="重做 (Ctrl+Y)">重做</button>
+    </div>
 
-    <h3>礼包码列表</h3>
-    <input type="text" id="cdk" placeholder="礼包码">
-    <button onclick="addCDK()">添加礼包码</button>
-    <ul id="cdkList"></ul>
+    <h3>预设物品（拖拽到画布）</h3>
+    <div id="presetList" style="margin-bottom:10px;"></div>
 
-    <button onclick="redeemCodes()">开始兑换</button>
+    <h4>新增物品</h4>
+    <label>名称: <input id="newPresetName" type="text" style="width:100%"></label>
+    <label>宽: <input id="newPresetW" type="number" value="2" min="1" style="width:80px"> 高: <input id="newPresetH"
+                                                                                                     type="number"
+                                                                                                     value="2" min="1"
+                                                                                                     style="width:80px"></label>
+    <label>颜色: <input id="newPresetColor" type="color" value="#8888ff"></label>
+    <div class="stack">
+        <button onclick="addPreset()">添加预设</button>
+        <button onclick="savePresets()">导出预设</button>
+        <input id="loadPresetsFile" type="file" accept="application/json" onchange="loadPresets(event)">
+    </div>
 
-    <h3>兑换结果</h3>
-    <textarea id="result" readonly></textarea>
+    <h3>地图数据</h3>
+    <div class="stack">
+        <button onclick="saveMap()">导出地图</button>
+        <input id="loadMapFile" type="file" accept="application/json" onchange="loadMap(event)">
+        <button onclick="exportPNG()">导出 PNG</button>
+    </div>
+
+    <div class="muted">
+        提示：滚轮缩放（以鼠标为中心）；按空格键或按中键并拖动可平移；从左侧拖拽物品到画布放置；放置前会检查冲突并高亮红色格子，放置后物品中心显示名称。
+    </div>
 </div>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/blueimp-md5/2.18.0/js/md5.min.js"></script>
+
+<div id="mapContainer">
+    <canvas id="mapCanvas" tabindex="0"></canvas>
+</div>
+
 <script>
-    const apiLogin = "https://wjdr-giftcode-api.campfiregames.cn/api/player";
-    const apiRedeem = "https://wjdr-giftcode-api.campfiregames.cn/api/gift_code";
-    function generateSign(data) {
-        const fixedString = "Uiv#87#SPan.ECsp";
+    /* ------------------------
+       全局状态与初始化
+       ------------------------ */
+    let mapW = 80, mapH = 80, cellSize = 16;
+    let mapData = [];          // mapData[y][x] = color hex string, '#ffffff' 表示空白
+    let presets = [
+        {name: '城堡', w: 2, h: 2, color: '#8888ff'},
+        {name: '联盟总部', w: 3, h: 3, color: '#ff4444'},
+        {name: '山体', w: 8, h: 8, color: '#888888'}
+    ];
+    let placedItems = [];      // 放置后记录 {name,x,y,w,h,color}
 
-        // 按 key 进行排序
-        const sortedKeys = Object.keys(data).sort();
+    function createMapData(w = mapW, h = mapH) {
+        mapW = w;
+        mapH = h;
+        mapData = Array.from({length: mapH}, () => Array(mapW).fill('#ffffff'));
+        placedItems = [];
+    }
 
-        // 构造查询字符串
-        const queryString = sortedKeys.map(key => {
-            const value = typeof data[key] === 'object' ? JSON.stringify(data[key]) : data[key];
-            return `${key}=${value}`;
-        }).join('&');
+    createMapData();
 
-        // 拼接固定字符串
-        const signString = queryString + fixedString;
+    let mode = 'paint';
+    let showGrid = true;
 
-        // 计算 MD5 哈希
+    // 视图变换
+    let panX = 0, panY = 0;
+    let scale = 1.0;
+    let isPanning = false;
+    let lastPan = null;
+    let isSpacePressed = false;
+
+    // 拖拽预设相关
+    // 拖动对象
+    let draggingPreset = null;
+    // 是否在拖动状态
+    let isDraggingFromToolbar = false;
+    // 绘图坐标
+    let previewPos = null; // {x,y} 网格坐标预览
+
+    // 撤销/重做
+    let undoStack = [];
+    let redoStack = [];
+    const MAX_HISTORY = 80;
+
+    /* ------------------------
+       DOM & 画布准备
+       ------------------------ */
+    const canvas = document.getElementById('mapCanvas');
+    const ctx = canvas.getContext('2d');
+
+    function resizeCanvasToContainer() {
+        const rect = document.getElementById('mapContainer').getBoundingClientRect();
+        canvas.width = Math.max(1, Math.floor(rect.width));
+        canvas.height = Math.max(1, Math.floor(rect.height));
+        drawMap();
+    }
+
+    window.addEventListener('resize', resizeCanvasToContainer);
+    resizeCanvasToContainer();
+
+    /* ------------------------
+       历史记录：saveHistory / undo / redo
+       ------------------------ */
+    function snapshot() {
+        // 深拷贝 mapData 和 placedItems
         return {
-            sign: md5(signString), // 需要使用 MD5 库，例如 blueimp-md5
-            ...data
+            mapData: mapData.map(row => row.slice()),
+            placedItems: JSON.parse(JSON.stringify(placedItems))
         };
     }
 
-    function loadData() {
-        return JSON.parse(localStorage.getItem("whiteoutRedemption")) || { fids: [], cdks: [] };
+    function saveHistory() {
+        // push current snapshot to undo stack, clear redo
+        undoStack.push(snapshot());
+        if (undoStack.length > MAX_HISTORY) undoStack.shift();
+        redoStack = [];
+        updateHistoryButtons();
     }
 
-    function saveData(data) {
-        localStorage.setItem("whiteoutRedemption", JSON.stringify(data));
+    function undo() {
+        if (undoStack.length === 0) return;
+        // push current to redo
+        redoStack.push(snapshot());
+        const snap = undoStack.pop();
+        mapData = snap.mapData.map(row => row.slice());
+        placedItems = JSON.parse(JSON.stringify(snap.placedItems));
+        drawMap();
+        updateHistoryButtons();
     }
 
-    function renderLists() {
-        const data = loadData();
-        const fidList = document.getElementById("fidList");
-        const cdkList = document.getElementById("cdkList");
+    function redo() {
+        if (redoStack.length === 0) return;
+        undoStack.push(snapshot());
+        const snap = redoStack.pop();
+        mapData = snap.mapData.map(row => row.slice());
+        placedItems = JSON.parse(JSON.stringify(snap.placedItems));
+        drawMap();
+        updateHistoryButtons();
+    }
 
-        fidList.innerHTML = "";
-        cdkList.innerHTML = "";
+    function updateHistoryButtons() {
+        // (Optional) Could enable/disable UI buttons; left simple here
+    }
 
-        data.fids.forEach((fid, index) => {
-            let li = document.createElement("li");
-            li.innerHTML = `${fid} <span class="remove" onclick="removeFID(${index})">❌</span>`;
-            fidList.appendChild(li);
+
+    function applyCanvasSize() {
+        const w = parseInt(document.getElementById('mapWidth').value) || mapW;
+        const h = parseInt(document.getElementById('mapHeight').value) || mapH;
+        const cs = parseInt(document.getElementById('cellSizeInput').value) || cellSize;
+        cellSize = cs;
+        createMapData(w, h);
+        panX = panY = 0;
+        scale = 1;
+        // clear history because changing size is a major action
+        undoStack = [];
+        redoStack = [];
+        drawMap();
+    }
+
+    function resetView() {
+        panX = panY = 0;
+        scale = 1;
+        drawMap();
+    }
+
+    function toggleGrid() {
+        showGrid = !showGrid;
+        drawMap();
+    }
+
+    function clearMap() {
+        saveHistory();
+        createMapData(mapW, mapH);
+        drawMap();
+    }
+
+    /* ------------------------
+       预设面板（渲染 + 管理）
+       ------------------------ */
+    function renderPresets() {
+        const box = document.getElementById('presetList');
+        box.innerHTML = '';
+        presets.forEach((p, idx) => {
+            const el = document.createElement('div');
+            el.className = 'preset-item';
+            el.textContent = `${p.name} (${p.w}×${p.h})`;
+            el.draggable = true;
+            el.addEventListener('dragstart', ev => {
+                console.log('dragstart');
+                draggingPreset = p;
+                isDraggingFromToolbar = true;
+                // use invisible drag image to avoid default ghost
+                const tmp = document.createElement('canvas');
+                tmp.width = 1;
+                tmp.height = 1;
+                ev.dataTransfer.setDragImage(tmp, 0, 0);
+                // focus canvas so we can still capture keyboard (space)
+                canvas.focus();
+            });
+            el.addEventListener('dragend', ev => {
+                console.log('dragend');
+                draggingPreset = null;
+                isDraggingFromToolbar = false;
+                previewPos = null;
+                drawMap();
+            });
+            box.appendChild(el);
         });
-
-        data.cdks.forEach((cdk, index) => {
-            let li = document.createElement("li");
-            li.innerHTML = `${cdk} <span class="remove" onclick="removeCDK(${index})">❌</span>`;
-            cdkList.appendChild(li);
-        });
     }
 
-    async function addFID() {
-        // let name = document.getElementById("fidName").value.trim();
-        let fid = document.getElementById("fid").value.trim();
-        let resultArea = document.getElementById("result");
-        if (fid) {
-            let loginResponse = await fetch(apiLogin, {
-                method: "POST",
-                headers: {"Content-Type": "application/x-www-form-urlencoded"},
-                body: new URLSearchParams(generateSign({fid, time: Date.now()}))
-            }).then(res => res.json());
+    renderPresets();
 
-            if (loginResponse.msg !== "success") {
-                resultArea.value += `❌ [登录失败] ${fid}: ${loginResponse.msg}\n`;
-                return;
+    function addPreset() {
+        const name = (document.getElementById('newPresetName').value || '').trim();
+        const w = parseInt(document.getElementById('newPresetW').value) || 1;
+        const h = parseInt(document.getElementById('newPresetH').value) || 1;
+        const color = document.getElementById('newPresetColor').value || '#8888ff';
+        if (!name) return alert('请输入名称');
+        presets.push({name, w, h, color});
+        renderPresets();
+    }
+
+    function savePresets() {
+        download('presets.json', JSON.stringify(presets, null, 2));
+    }
+
+    function loadPresets(e) {
+        const f = e.target.files[0];
+        if (!f) return;
+        const fr = new FileReader();
+        fr.onload = () => {
+            try {
+                const arr = JSON.parse(fr.result);
+                if (!Array.isArray(arr)) throw new Error('格式错误');
+                presets = arr;
+                renderPresets();
+            } catch (err) {
+                alert('导入预设失败：' + err.message);
             }
+        };
+        fr.readAsText(f);
+    }
 
-            let nickName = loginResponse.data.nickname;
-            resultArea.value += `✅ [登录成功] ${nickName} (${fid})\n`;
-            let data = loadData();
-            data.fids.push(`${nickName} (${fid})`);
-            saveData(data);
-            renderLists();
-            // document.getElementById("fidName").value = "";
-            document.getElementById("fid").value = "";
+    /* ------------------------
+       放置规则：是否可放置（不能覆盖非空格子）
+       ------------------------ */
+    function canPlacePresetAt(x, y, preset) {
+        for (let yy = 0; yy < preset.h; yy++) {
+            for (let xx = 0; xx < preset.w; xx++) {
+                const gx = x + xx, gy = y + yy;
+                if (gx < 0 || gy < 0 || gx >= mapW || gy >= mapH) return false;
+                // const occupied = mapData[gy][gx] !== '#ffffff';
+                // return item ? item === preset : true
+                if (mapData[gy][gx] !== '#ffffff') {
+                    let occupied = false;
+                    const coverItems = coverItem({x: gx, y: gy})
+                    for (let i = 0; i < coverItems.length; i++) {
+                        const item = coverItems[i];
+                        occupied = item ? item !== preset : false
+                        if (occupied) {
+                            return false;
+                        }
+                    }
+                }
+            }
         }
+        return true;
     }
 
-    function removeFID(index) {
-        let data = loadData();
-        data.fids.splice(index, 1);
-        saveData(data);
-        renderLists();
-    }
-
-    function addCDK() {
-        let cdk = document.getElementById("cdk").value.trim();
-        if (cdk) {
-            let data = loadData();
-            data.cdks.push(cdk);
-            saveData(data);
-            renderLists();
-            document.getElementById("cdk").value = "";
+    function placePresetAt(x, y, preset) {
+        // assume already validated
+        for (let yy = 0; yy < preset.h; yy++) {
+            for (let xx = 0; xx < preset.w; xx++) {
+                const gx = x + xx, gy = y + yy;
+                mapData[gy][gx] = preset.color;
+            }
         }
+        placedItems.push({name: preset.name, x: x, y: y, w: preset.w, h: preset.h, color: preset.color});
+        drawMap();
     }
 
-    function removeCDK(index) {
-        let data = loadData();
-        data.cdks.splice(index, 1);
-        saveData(data);
-        renderLists();
+    function removePlace(preset) {
+        // assume already validated
+        for (let yy = 0; yy < preset.h; yy++) {
+            for (let xx = 0; xx < preset.w; xx++) {
+                const gx = preset.x + xx, gy = preset.y + yy;
+                mapData[gy][gx] = '#ffffff';
+            }
+        }
+        let i = placedItems.indexOf(preset);
+        if (i !== -1) {
+            placedItems.splice(i, 1); // ⭐ 原数组删除
+        }
+        drawMap()
     }
 
-    async function redeemCodes() {
-        let data = loadData();
-        let resultArea = document.getElementById("result");
-        resultArea.value = "开始兑换...\n";
+    function coverItem(g) {
+        let coverItems = [];
+        for (let i = placedItems.length - 1; i >= 0; i--) {
+            const img = placedItems[i];
+            const inside =
+                g.x >= img.x &&
+                g.x < img.x + img.w &&
+                g.y >= img.y &&
+                g.y < img.y + img.h;
 
-        if (data.fids.length === 0 || data.cdks.length === 0) {
-            resultArea.value += "❌ 请至少添加一个玩家 ID 和礼包码！\n";
+            if (inside) {
+                coverItems.push(placedItems[i])
+                // return placedItems[i];
+            }
+        }
+        return coverItems;
+    }
+
+    /* ------------------------
+       坐标转换：屏幕 -> 网格（考虑 pan & scale）
+       ------------------------ */
+    function screenToGrid(clientX, clientY) {
+        const rect = canvas.getBoundingClientRect();
+        const sx = clientX - rect.left - panX;
+        const sy = clientY - rect.top - panY;
+        const wx = sx / scale;
+        const wy = sy / scale;
+        const gx = Math.floor(wx / cellSize);
+        const gy = Math.floor(wy / cellSize);
+        if (gx < 0 || gy < 0 || gx >= mapW || gy >= mapH) return null;
+        return {x: gx, y: gy};
+    }
+
+    /* ------------------------
+       画布事件：平移、绘制、拖拽预设（支持 HTML5 drag + pointer）
+       ------------------------ */
+    window.addEventListener('keydown', (e) => {
+        // ctrl+z / ctrl+y handled separately below
+        if (e.code === 'Space') {
+            isSpacePressed = true;
+            canvas.style.cursor = 'grab';
+            e.preventDefault();
+        }
+    });
+    window.addEventListener('keyup', (e) => {
+        if (e.code === 'Space') {
+            isSpacePressed = false;
+            canvas.style.cursor = 'crosshair';
+        }
+    });
+
+    // pointer (mouse/touch) events
+    canvas.addEventListener('pointerdown', (e) => {
+        console.log('pointerdown')
+        canvas.setPointerCapture(e.pointerId);
+        // pan with space or middle button
+        if (e.button === 1 || isSpacePressed) {
+            isPanning = true;
+            lastPan = {x: e.clientX, y: e.clientY};
+            canvas.style.cursor = 'grabbing';
+        }
+        const g = screenToGrid(e.clientX, e.clientY);
+        const coverItems = coverItem(g);
+        if (coverItems.length > 0) {
+            draggingPreset = coverItem(g)[0];
+            isDraggingFromToolbar = true;
+        }
+    });
+    canvas.addEventListener('pointermove', (e) => {
+        console.log('pointermove')
+        if (isPanning) {
+            const dx = e.clientX - lastPan.x, dy = e.clientY - lastPan.y;
+            lastPan = {x: e.clientX, y: e.clientY};
+            panX += dx;
+            panY += dy;
+            drawMap();
             return;
         }
-
-        for (let fidEntry of data.fids) {
-            let fid = fidEntry.match(/\(([^)]+)\)/)[1];
-            let loginResponse = await fetch(apiLogin, {
-                method: "POST",
-                headers: { "Content-Type": "application/x-www-form-urlencoded" },
-                body: new URLSearchParams(generateSign({ fid, time: Date.now() }))
-            }).then(res => res.json());
-
-            if (loginResponse.msg !== "success") {
-                resultArea.value += `❌ [登录失败] ${fid}: ${loginResponse.msg}\n`;
-                continue;
+        // If dragging from toolbar using HTML5 Drag API, pointermove may not fire during drag.
+        // But if the user presses mouse and drags in canvas (not drag API), keep preview via isDraggingFromToolbar flag.
+        if (isDraggingFromToolbar && draggingPreset) {
+            // pointermove may be triggered if dragging via mouse but not necessarily; we still compute preview here
+            const g = screenToGrid(e.clientX, e.clientY);
+            previewPos = g;
+            drawMap();
+        }
+    });
+    window.addEventListener('pointerup', (e) => {
+        console.log('pointerup')
+        canvas.releasePointerCapture && canvas.releasePointerCapture(e.pointerId);
+        if (isPanning) {
+            isPanning = false;
+            canvas.style.cursor = isSpacePressed ? 'grab' : 'crosshair';
+        }
+        if (isDraggingFromToolbar && draggingPreset) {
+            const cell = screenToGrid(e.clientX, e.clientY);
+            if (cell && canPlacePresetAt(cell.x, cell.y, draggingPreset)) {
+                saveHistory();
+                removePlace(draggingPreset)
+                placePresetAt(cell.x, cell.y, draggingPreset);
             }
+            draggingPreset = null;
+            isDraggingFromToolbar = false;
+            previewPos = null;
+            drawMap();
+        }
+    });
 
-            let nickName = loginResponse.data.nickname;
-            resultArea.value += `✅ [登录成功] ${nickName} (${fid})\n`;
+    // wheel zoom
+    canvas.addEventListener('wheel', (e) => {
+        e.preventDefault();
+        const rect = canvas.getBoundingClientRect();
+        const mx = e.clientX - rect.left;
+        const my = e.clientY - rect.top;
+        const worldX = (mx - panX) / scale;
+        const worldY = (my - panY) / scale;
+        const delta = -e.deltaY;
+        const zoomFactor = Math.exp(delta * 0.0015 * (e.ctrlKey ? 2.5 : 1));
+        const newScale = Math.max(0.2, Math.min(8, scale * zoomFactor));
+        scale = newScale;
+        // adjust pan so mouse points to same world coord
+        panX = mx - worldX * scale;
+        panY = my - worldY * scale;
+        drawMap();
+    }, {passive: false});
 
-            for (let cdk of data.cdks) {
-                let redeemResponse = await fetch(apiRedeem, {
-                    method: "POST",
-                    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-                    body: new URLSearchParams(generateSign({ fid, cdk, time: Date.now() }))
-                }).then(res => res.json());
-                let msg = redeemResponse.msg === "SUCCESS" ? "成功" : redeemResponse.msg === "RECEIVED."?"重复兑换":"失败";
-                resultArea.value += `🎁 [兑换] ${nickName} 礼包 ${cdk}: ${msg}\n`;
-                await new Promise((resolve,reject) => {
-                    setTimeout(()=>{
-                        resolve()
-                    },500)
-                })
+    // Drag & Drop events (HTML5 Drag API) so preview works during dragover & drop
+    canvas.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        console.log('dropover')
+        // update preview position during dragover
+        if (isDraggingFromToolbar && draggingPreset) {
+            const g = screenToGrid(e.clientX, e.clientY);
+            previewPos = g;
+            drawMap();
+        }
+    });
+    canvas.addEventListener('drop', (e) => {
+        e.preventDefault();
+        console.log('drop')
+        if (!draggingPreset) return;
+        const cell = screenToGrid(e.clientX, e.clientY);
+        if (cell && canPlacePresetAt(cell.x, cell.y, draggingPreset)) {
+            saveHistory();
+            placePresetAt(cell.x, cell.y, draggingPreset);
+        } else {
+            // cannot place; optionally give feedback
+            // we already show red preview during dragover
+        }
+        draggingPreset = null;
+        isDraggingFromToolbar = false;
+        previewPos = null;
+        drawMap();
+    });
+    canvas.addEventListener('dragenter', (e) => {
+        e.preventDefault();
+    });
+    canvas.addEventListener('dragleave', (e) => { /* optional */
+    });
+
+    /* ------------------------
+       绘制主函数（包含预览与冲突高亮、名称显示）
+       ------------------------ */
+    function drawMap() {
+        // clear full canvas
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        // save and apply transform
+        ctx.save();
+        ctx.translate(panX, panY);
+        ctx.scale(scale, scale);
+
+        // draw base cells
+        for (let y = 0; y < mapH; y++) {
+            for (let x = 0; x < mapW; x++) {
+                ctx.fillStyle = mapData[y][x] || '#ffffff';
+                ctx.fillRect(x * cellSize, y * cellSize, cellSize, cellSize);
             }
         }
-        resultArea.value += "\n✅ 兑换完成！";
+
+        // draw placed item labels (centered, with outline)
+        if (placedItems.length) {
+            ctx.save();
+            for (const item of placedItems) {
+                const cx = (item.x + item.w / 2) * cellSize;
+                const cy = (item.y + item.h / 2) * cellSize;
+                // font size relative to cellSize
+                const fontSize = Math.max(10, Math.min(24, cellSize));
+                ctx.font = `${fontSize}px sans-serif`;
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                // outline
+                ctx.lineWidth = Math.max(2, 3 / scale);
+                ctx.strokeStyle = 'rgba(0,0,0,0.6)';
+                ctx.strokeText(item.name, cx, cy);
+                ctx.fillStyle = '#fff';
+                ctx.fillText(item.name, cx, cy);
+            }
+            ctx.restore();
+        }
+
+        // preview: if dragging preset from toolbar, draw per-cell preview and highlight conflicts
+        if (isDraggingFromToolbar && draggingPreset && previewPos) {
+            const p = draggingPreset;
+            let anyCollision = false;
+            for (let yy = 0; yy < p.h; yy++) {
+                for (let xx = 0; xx < p.w; xx++) {
+                    const gx = previewPos.x + xx;
+                    const gy = previewPos.y + yy;
+                    const px = gx * cellSize, py = gy * cellSize;
+                    // out of bounds?
+                    if (gx < 0 || gy < 0 || gx >= mapW || gy >= mapH) {
+                        ctx.globalAlpha = 0.35;
+                        ctx.fillStyle = 'red';
+                        ctx.fillRect(px, py, cellSize, cellSize);
+                        ctx.globalAlpha = 1;
+                        anyCollision = true;
+                        continue;
+                    }
+                    const occupied = !canPlacePresetAt(previewPos.x, previewPos.y, draggingPreset);
+                    // const occupied = mapData[gy][gx] !== '#ffffff';
+                    if (occupied) {
+                        ctx.globalAlpha = 0.55;
+                        ctx.fillStyle = 'red';
+                        ctx.fillRect(px, py, cellSize, cellSize);
+                        ctx.globalAlpha = 1;
+                        anyCollision = true;
+                    } else {
+                        ctx.globalAlpha = 0.45;
+                        ctx.fillStyle = p.color;
+                        ctx.fillRect(px, py, cellSize, cellSize);
+                        ctx.globalAlpha = 1;
+                        ctx.strokeStyle = 'rgba(255,255,255,0.6)';
+                        ctx.lineWidth = Math.max(1 / scale, 0.5);
+                        ctx.strokeRect(px + 0.25 / scale, py + 0.25 / scale, cellSize - 0.5 / scale, cellSize - 0.5 / scale);
+                    }
+                }
+            }
+            // border around preview area (green if ok, red if collision)
+            ctx.save();
+            const areaX = previewPos.x * cellSize, areaY = previewPos.y * cellSize, areaW = p.w * cellSize,
+                areaH = p.h * cellSize;
+            ctx.lineWidth = Math.max(2 / scale, 1);
+            ctx.strokeStyle = anyCollision ? 'red' : 'limegreen';
+            ctx.strokeRect(areaX + 0.5 / scale, areaY + 0.5 / scale, areaW - 1 / scale, areaH - 1 / scale);
+
+            // also draw preview name in the center (semi-transparent)
+            const cx = (previewPos.x + p.w / 2) * cellSize;
+            const cy = (previewPos.y + p.h / 2) * cellSize;
+            ctx.font = `${Math.max(10, Math.min(20, cellSize))}px sans-serif`;
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.globalAlpha = 0.9;
+            ctx.strokeStyle = 'rgba(0,0,0,0.6)';
+            ctx.lineWidth = Math.max(3 / scale, 2);
+            ctx.strokeText(p.name, cx, cy);
+            ctx.fillStyle = '#fff';
+            ctx.fillText(p.name, cx, cy);
+            ctx.globalAlpha = 1;
+            ctx.restore();
+        }
+
+        // grid lines
+        if (showGrid) {
+            ctx.save();
+            ctx.strokeStyle = 'rgba(0,0,0,0.12)';
+            ctx.lineWidth = 1 / scale;
+            for (let i = 0; i <= mapW; i++) {
+                ctx.beginPath();
+                ctx.moveTo(i * cellSize, 0);
+                ctx.lineTo(i * cellSize, mapH * cellSize);
+                ctx.stroke();
+            }
+            for (let i = 0; i <= mapH; i++) {
+                ctx.beginPath();
+                ctx.moveTo(0, i * cellSize);
+                ctx.lineTo(mapW * cellSize, i * cellSize);
+                ctx.stroke();
+            }
+            ctx.restore();
+        }
+
+        ctx.restore();
     }
 
-    document.addEventListener("DOMContentLoaded", renderLists);
+    /* ------------------------
+       导出/导入、PNG、下载辅助
+       ------------------------ */
+    function saveMap() {
+        const payload = {mapW, mapH, cellSize, mapData, placedItems};
+        download('map.json', JSON.stringify(payload, null, 2));
+    }
+
+    function loadMap(e) {
+        const f = e.target.files[0];
+        if (!f) return;
+        const fr = new FileReader();
+        fr.onload = () => {
+            try {
+                const d = JSON.parse(fr.result);
+                if (!d.mapW || !d.mapH || !d.mapData) throw new Error('格式不正确');
+                // saveHistory? We'll clear history to avoid mismatch
+                undoStack = [];
+                redoStack = [];
+                mapW = d.mapW;
+                mapH = d.mapH;
+                cellSize = d.cellSize || cellSize;
+                mapData = d.mapData;
+                placedItems = d.placedItems || [];
+                document.getElementById('mapWidth').value = mapW;
+                document.getElementById('mapHeight').value = mapH;
+                document.getElementById('cellSizeInput').value = cellSize;
+                drawMap();
+            } catch (err) {
+                alert('导入地图失败：' + err.message);
+            }
+        };
+        fr.readAsText(f);
+    }
+
+    function exportPNG() {
+        // Render visible canvas content into an offscreen canvas including transform
+        const out = document.createElement('canvas');
+        out.width = canvas.width;
+        out.height = canvas.height;
+        const oc = out.getContext('2d');
+        oc.fillStyle = '#fff';
+        oc.fillRect(0, 0, out.width, out.height);
+        oc.save();
+        oc.translate(panX, panY);
+        oc.scale(scale, scale);
+        for (let y = 0; y < mapH; y++) for (let x = 0; x < mapW; x++) {
+            oc.fillStyle = mapData[y][x] || '#fff';
+            oc.fillRect(x * cellSize, y * cellSize, cellSize, cellSize);
+        }
+        // draw placed item labels (on exported image)
+        for (const item of placedItems) {
+            const cx = (item.x + item.w / 2) * cellSize;
+            const cy = (item.y + item.h / 2) * cellSize;
+            const fontSize = Math.max(10, Math.min(24, cellSize));
+            oc.font = `${fontSize}px sans-serif`;
+            oc.textAlign = 'center';
+            oc.textBaseline = 'middle';
+            oc.lineWidth = Math.max(3 / scale, 2);
+            oc.strokeStyle = 'rgba(0,0,0,0.6)';
+            oc.strokeText(item.name, cx, cy);
+            oc.fillStyle = '#fff';
+            oc.fillText(item.name, cx, cy);
+        }
+        oc.restore();
+        const url = out.toDataURL('image/png');
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `map-${mapW}x${mapH}.png`;
+        a.click();
+    }
+
+    function savePresets() {
+        download('presets.json', JSON.stringify(presets, null, 2));
+    }
+
+    function loadPresets(e) {
+        const f = e.target.files[0];
+        if (!f) return;
+        const fr = new FileReader();
+        fr.onload = () => {
+            try {
+                const arr = JSON.parse(fr.result);
+                if (!Array.isArray(arr)) throw new Error('格式错误');
+                presets = arr;
+                renderPresets();
+            } catch (err) {
+                alert('导入预设失败：' + err.message);
+            }
+        };
+        fr.readAsText(f);
+    }
+
+    function download(filename, text) {
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(new Blob([text], {type: 'application/json'}));
+        a.download = filename;
+        a.click();
+    }
+
+    /* ------------------------
+       键盘快捷键（撤销/重做）与辅助
+       ------------------------ */
+    window.addEventListener('keydown', (e) => {
+        // Ctrl+Z / Ctrl+Y / Ctrl+Shift+Z
+        if (e.ctrlKey && !e.shiftKey && (e.key === 'z' || e.key === 'Z')) {
+            e.preventDefault();
+            undo();
+            return;
+        }
+        if (e.ctrlKey && (e.key === 'y' || e.key === 'Y' || (e.shiftKey && (e.key === 'Z')))) {
+            e.preventDefault();
+            redo();
+            return;
+        }
+    });
+
+    /* ------------------------
+       初始化 - 绑定 UI & 初次渲染
+       ------------------------ */
+    document.getElementById('mapWidth').value = mapW;
+    document.getElementById('mapHeight').value = mapH;
+    document.getElementById('cellSizeInput').value = cellSize;
+    renderPresets();
+    drawMap();
+
+    /* ------------------------
+       小改进：在窗口失焦时终止绘制/平移
+       ------------------------ */
+    window.addEventListener('blur', () => {
+        isPanning = false;
+        canvas.style.cursor = isSpacePressed ? 'grab' : 'crosshair';
+    });
 </script>
 
 </body>
