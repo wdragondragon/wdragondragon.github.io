@@ -106,6 +106,20 @@
         .controls {
             margin-bottom: 12px;
         }
+
+        .controls button[data-mode] {
+            padding: 6px 12px;
+            border: 1px solid #444;
+            background: #222;
+            color: #ccc;
+            cursor: pointer;
+        }
+
+        .controls button[data-mode].active {
+            background: #409eff; /* 高亮背景 */
+            color: #fff;
+            border-color: #409eff;
+        }
     </style>
 </head>
 <body>
@@ -114,6 +128,7 @@
     <label>宽度（格）: <input id="mapWidth" type="number" value="80" min="4" max="300" style="width:90px"></label>
     <label>高度（格）: <input id="mapHeight" type="number" value="80" min="4" max="300" style="width:90px"></label>
     <label>格子像素: <input id="cellSizeInput" type="number" value="16" min="4" max="128" style="width:90px"></label>
+    <label>字体大小: <input id="fontSizeInput" type="number" value="16" min="4" max="128" style="width:90px"></label>
     <div class="stack">
         <button onclick="applyCanvasSize()">应用尺寸</button>
         <button onclick="resetView()" title="重置缩放和平移">重置视图</button>
@@ -121,6 +136,8 @@
 
     <h3>工具</h3>
     <div class="stack controls">
+        <button data-mode="catch" onclick="setMode('catch')" id="btnPaint">拖拽工具</button>
+        <button data-mode="delete" onclick="setMode('delete')" id="btnErase">删除工具</button>
         <button onclick="toggleGrid()" id="btnGrid">网格</button>
         <button onclick="clearMap()" id="btnClear">清空</button>
     </div>
@@ -162,11 +179,41 @@
     <canvas id="mapCanvas" tabindex="0"></canvas>
 </div>
 
+
+<!-- 自定义弹窗表单 -->
+<div id="presetFormModal" style="
+    display:none;
+    position:fixed;
+    top:50%;
+    left:50%;
+    transform:translate(-50%, -50%);
+    background:white;
+    padding:20px;
+    border:1px solid #ccc;
+    border-radius:8px;
+    box-shadow:0 4px 12px rgba(0,0,0,0.3);
+    z-index:1000;
+">
+    <h3>请输入建筑信息</h3>
+    <label>
+        名称: <input type="text" id="presetName" autocomplete="off"/>
+    </label>
+    <br/><br/>
+    <label>
+        颜色：
+        <input type="color" id="presetColor" autocomplete="off"/>
+    </label>
+    <br/><br/>
+    <button id="presetConfirm">确认</button>
+    <button id="presetCancel">取消</button>
+</div>
+
+
 <script>
     /* ------------------------
        全局状态与初始化
        ------------------------ */
-    let mapW = 80, mapH = 80, cellSize = 16;
+    let mapW = 80, mapH = 80, cellSize = 32, fontSize = 16;
     let mapData = [];          // mapData[y][x] = color hex string, '#ffffff' 表示空白
     let presets = [
         {name: '城堡', w: 2, h: 2, color: '#8888ff'},
@@ -184,12 +231,13 @@
 
     createMapData();
 
-    let mode = 'paint';
+    let mode = 'catch';
+    updateModeButtons();
     let showGrid = true;
 
     // 视图变换
     let panX = 0, panY = 0;
-    let scale = 1.0;
+    let scale = 0.5;
     let isPanning = false;
     let lastPan = null;
     let isSpacePressed = false;
@@ -267,12 +315,30 @@
         // (Optional) Could enable/disable UI buttons; left simple here
     }
 
+    function setMode(m) {
+        mode = m;
+        updateModeButtons();
+        // visual hint: focus canvas to capture keys
+        canvas.focus();
+    }
+
+
+    function updateModeButtons() {
+        document
+            .querySelectorAll('.controls button[data-mode]')
+            .forEach(btn => {
+                const btnMode = btn.dataset.mode;
+                btn.classList.toggle('active', btnMode === mode);
+            });
+    }
 
     function applyCanvasSize() {
         const w = parseInt(document.getElementById('mapWidth').value) || mapW;
         const h = parseInt(document.getElementById('mapHeight').value) || mapH;
         const cs = parseInt(document.getElementById('cellSizeInput').value) || cellSize;
+        const fs = parseInt(document.getElementById('fontSizeInput').value) || fontSize;
         cellSize = cs;
+        fontSize = fs;
         createMapData(w, h);
         panX = panY = 0;
         scale = 1;
@@ -482,10 +548,17 @@
         }
         const g = screenToGrid(e.clientX, e.clientY);
         const coverItems = coverItem(g);
-        if (coverItems.length > 0) {
-            draggingPreset = coverItem(g)[0];
-            isDraggingFromToolbar = true;
+        if (mode === 'catch') {
+            if (coverItems.length > 0) {
+                draggingPreset = coverItem(g)[0];
+                isDraggingFromToolbar = true;
+            }
+        } else if (mode === 'delete') {
+            saveHistory();
+            removePlace(coverItem(g)[0]);
+            drawMap();
         }
+
     });
     canvas.addEventListener('pointermove', (e) => {
         console.log('pointermove')
@@ -515,6 +588,10 @@
         }
         if (isDraggingFromToolbar && draggingPreset) {
             const cell = screenToGrid(e.clientX, e.clientY);
+            if (!cell) {
+                saveHistory();
+                removePlace(draggingPreset)
+            }
             if (cell && canPlacePresetAt(cell.x, cell.y, draggingPreset)) {
                 saveHistory();
                 removePlace(draggingPreset)
@@ -562,11 +639,29 @@
         if (!draggingPreset) return;
         const cell = screenToGrid(e.clientX, e.clientY);
         if (cell && canPlacePresetAt(cell.x, cell.y, draggingPreset)) {
-            saveHistory();
-            placePresetAt(cell.x, cell.y, draggingPreset);
-        } else {
-            // cannot place; optionally give feedback
-            // we already show red preview during dragover
+            // 弹窗输入
+            // const info = prompt("请输入名称：", "");
+            // if (info !== null && info.trim() !== "") {
+            //     console.log("用户输入的信息:", info);
+            //     console.log(draggingPreset)
+            //     draggingPreset.name = info;
+            // }
+            const preset = {...draggingPreset};
+            // 弹出自定义表单
+            showPresetForm(preset, (p, info) => {
+                if (info) {
+                    // 保存用户输入的信息
+                    console.log("用户输入:", info);
+                    if (info.name !== null && info.name.trim() !== "") {
+                        p.name = info.name;
+                    }
+                    p.color = info.color;
+                    saveHistory();
+                    placePresetAt(cell.x, cell.y, p);
+                }
+                // drawMap(); // 重新绘制地图
+            });
+
         }
         draggingPreset = null;
         isDraggingFromToolbar = false;
@@ -605,7 +700,7 @@
                 const cx = (item.x + item.w / 2) * cellSize;
                 const cy = (item.y + item.h / 2) * cellSize;
                 // font size relative to cellSize
-                const fontSize = Math.max(10, Math.min(24, cellSize));
+                // const fontSize = Math.max(10, Math.min(24, cellSize));
                 ctx.font = `${fontSize}px sans-serif`;
                 ctx.textAlign = 'center';
                 ctx.textBaseline = 'middle';
@@ -615,6 +710,12 @@
                 ctx.strokeText(item.name, cx, cy);
                 ctx.fillStyle = '#fff';
                 ctx.fillText(item.name, cx, cy);
+
+                // 画对象框
+                ctx.globalAlpha = 1;
+                ctx.strokeStyle = 'rgba(0,0,0,0.8)';
+                ctx.lineWidth = Math.max(1 / scale, 1.5);
+                ctx.strokeRect(item.x * cellSize + 0.25 / scale, item.y * cellSize + 0.25 / scale, (cellSize * item.w) - 0.5 / scale, (cellSize * item.h) - 0.5 / scale);
             }
             ctx.restore();
         }
@@ -707,7 +808,7 @@
        导出/导入、PNG、下载辅助
        ------------------------ */
     function saveMap() {
-        const payload = {mapW, mapH, cellSize, mapData, placedItems};
+        const payload = {mapW, mapH, cellSize, fontSize, mapData, placedItems};
         download('map.json', JSON.stringify(payload, null, 2));
     }
 
@@ -725,11 +826,13 @@
                 mapW = d.mapW;
                 mapH = d.mapH;
                 cellSize = d.cellSize || cellSize;
+                fontSize = d.fontSize || fontSize;
                 mapData = d.mapData;
                 placedItems = d.placedItems || [];
                 document.getElementById('mapWidth').value = mapW;
                 document.getElementById('mapHeight').value = mapH;
                 document.getElementById('cellSizeInput').value = cellSize;
+                document.getElementById('fontSizeInput').value = fontSize;
                 drawMap();
             } catch (err) {
                 alert('导入地图失败：' + err.message);
@@ -757,7 +860,7 @@
         for (const item of placedItems) {
             const cx = (item.x + item.w / 2) * cellSize;
             const cy = (item.y + item.h / 2) * cellSize;
-            const fontSize = Math.max(10, Math.min(24, cellSize));
+            // const fontSize = fontSize;
             oc.font = `${fontSize}px sans-serif`;
             oc.textAlign = 'center';
             oc.textBaseline = 'middle';
@@ -826,6 +929,7 @@
     document.getElementById('mapWidth').value = mapW;
     document.getElementById('mapHeight').value = mapH;
     document.getElementById('cellSizeInput').value = cellSize;
+    document.getElementById('fontSizeInput').value = fontSize;
     renderPresets();
     drawMap();
 
@@ -836,6 +940,44 @@
         isPanning = false;
         canvas.style.cursor = isSpacePressed ? 'grab' : 'crosshair';
     });
+
+
+    // 弹窗表单逻辑
+    function showPresetForm(preset, callback) {
+        const modal = document.getElementById('presetFormModal');
+        const nameInput = document.getElementById('presetName');
+        const colorInput = document.getElementById('presetColor');
+        const confirmBtn = document.getElementById('presetConfirm');
+        const cancelBtn = document.getElementById('presetCancel');
+
+        // ⚡ 每次打开都先清空，再赋值
+        nameInput.value = '';
+        colorInput.value = '';
+
+        modal.style.display = 'block';
+        nameInput.value = preset.name;
+        colorInput.value = preset.color;
+        nameInput.focus();
+
+        function close() {
+            modal.style.display = 'none';
+            confirmBtn.onclick = null;
+            cancelBtn.onclick = null;
+        }
+
+        confirmBtn.onclick = () => {
+            callback(preset, {
+                name: nameInput.value.trim(),
+                color: colorInput.value
+            });
+            close();
+        };
+
+        cancelBtn.onclick = () => {
+            callback(preset, null);
+            close();
+        };
+    }
 </script>
 
 </body>
