@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>题库训练系统</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1><i class="fas fa-graduation-cap"></i> 题库训练系统</h1>
+            <div class="header-controls">
+                <button id="loadFile" class="btn"><i class="fas fa-folder-open"></i> 加载题库文件</button>
+                <input type="file" id="fileInput" accept=".txt" style="display: none;">
+                <button id="exportBtn" class="btn"><i class="fas fa-download"></i> 导出进度</button>
+                <button id="importBtn" class="btn"><i class="fas fa-upload"></i> 导入进度</button>
+                <input type="file" id="importFile" accept=".json" style="display: none;">
+                <button id="resetBtn" class="btn btn-warning"><i class="fas fa-redo"></i> 重置进度</button>
+            </div>
+        </header>
+
+        <main>
+            <div class="left-panel">
+                <div class="question-header">
+                    <div class="question-info">
+                        <span class="question-type" id="questionType">单选题</span>
+                        <span class="question-number" id="questionNumber">第 1 题 / 共 1432 题</span>
+                    </div>
+                    <div class="question-actions">
+                        <button id="prevBtn" class="btn"><i class="fas fa-chevron-left"></i> 上一题</button>
+                        <button id="nextBtn" class="btn">下一题 <i class="fas fa-chevron-right"></i></button>
+                    </div>
+                </div>
+
+                <div class="question-content">
+                    <h2 id="questionText">加载题目中...</h2>
+                    <div class="options" id="optionsContainer">
+                        <!-- 选项动态生成 -->
+                    </div>
+                    <div class="judgment-options" id="judgmentContainer" style="display: none;">
+                        <button class="judgment-btn correct-btn" data-value="正确">正确</button>
+                        <button class="judgment-btn wrong-btn" data-value="错误">错误</button>
+                    </div>
+                </div>
+
+                <div class="answer-section">
+                    <div class="answer-header">
+                        <h3><i class="fas fa-check-circle"></i> 答案与解析</h3>
+                        <button id="toggleExplanation" class="btn btn-small">显示解析</button>
+                    </div>
+                    <div class="answer-content">
+                        <div class="user-answer">
+                            <strong>您的答案：</strong>
+                            <span id="userAnswerText">未作答</span>
+                            <span id="answerStatus" class="status-unanswered">未作答</span>
+                        </div>
+                        <div class="correct-answer">
+                            <strong>正确答案：</strong>
+                            <span id="correctAnswerText">-</span>
+                        </div>
+                        <div class="explanation" id="explanationText" style="display: none;">
+                            <strong>解析：</strong>
+                            <p>解析内容加载中...</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="wrong-book-section">
+                    <button id="toggleWrongBook" class="btn btn-wrongbook">
+                        <i class="fas fa-bookmark"></i> 加入错题集
+                    </button>
+                    <button id="removeWrongBook" class="btn btn-wrongbook-remove" style="display: none;">
+                        <i class="fas fa-trash-alt"></i> 移除错题集
+                    </button>
+                    <span class="wrong-book-hint" id="wrongBookHint"></span>
+                </div>
+            </div>
+
+            <div class="right-panel">
+                <div class="stats-card">
+                    <h3><i class="fas fa-chart-bar"></i> 答题总览</h3>
+                    <div class="stats-grid">
+                        <div class="stat-item">
+                            <div class="stat-number" id="totalQuestions">1432</div>
+                            <div class="stat-label">总题数</div>
+                        </div>
+                        <div class="stat-item">
+                            <div class="stat-number" id="answeredCount">0</div>
+                            <div class="stat-label">已作答</div>
+                        </div>
+                        <div class="stat-item">
+                            <div class="stat-number" id="correctCount">0</div>
+                            <div class="stat-label">正确</div>
+                        </div>
+                        <div class="stat-item">
+                            <div class="stat-number" id="incorrectCount">0</div>
+                            <div class="stat-label">错误</div>
+                        </div>
+                        <div class="stat-item">
+                            <div class="stat-number" id="wrongBookCount">0</div>
+                            <div class="stat-label">错题集</div>
+                        </div>
+                    </div>
+                    <div class="progress-container">
+                        <div class="progress-bar">
+                            <div class="progress-fill" id="progressFill" style="width: 0%"></div>
+                        </div>
+                        <div class="progress-text" id="progressText">0% 完成</div>
+                    </div>
+                </div>
+
+                <div class="filter-card">
+                    <h3><i class="fas fa-filter"></i> 筛选</h3>
+                    <div class="filter-options">
+                        <label class="filter-option">
+                            <input type="radio" name="filter" value="all" checked>
+                            <span class="filter-label">全部题目</span>
+                        </label>
+                        <label class="filter-option">
+                            <input type="radio" name="filter" value="unanswered">
+                            <span class="filter-label">未作答</span>
+                        </label>
+                        <label class="filter-option">
+                            <input type="radio" name="filter" value="answering">
+                            <span class="filter-label">答题中</span>
+                        </label>
+                        <label class="filter-option">
+                            <input type="radio" name="filter" value="correct">
+                            <span class="filter-label">正确</span>
+                        </label>
+                        <label class="filter-option">
+                            <input type="radio" name="filter" value="incorrect">
+                            <span class="filter-label">错误</span>
+                        </label>
+                        <label class="filter-option">
+                            <input type="radio" name="filter" value="wrongbook">
+                            <span class="filter-label">错题集</span>
+                        </label>
+                    </div>
+                </div>
+
+                <div class="answer-sheet-card">
+                    <div class="answer-sheet-header">
+                        <h3><i class="fas fa-th-list"></i> 答题卡</h3>
+                        <div class="sheet-controls">
+                            <button id="prevPage" class="btn btn-small"><i class="fas fa-chevron-left"></i></button>
+                            <span id="pageInfo">第 1 页 / 共 72 页</span>
+                            <button id="nextPage" class="btn btn-small"><i class="fas fa-chevron-right"></i></button>
+                        </div>
+                    </div>
+                    <div class="answer-sheet-grid" id="answerSheetGrid">
+                        <!-- 答题卡按钮动态生成 -->
+                    </div>
+                </div>
+            </div>
+        </main>
+
+        <footer>
+            <p>题库训练系统 &copy; 2025 | 共 <span id="totalCount">1432</span> 题 | 当前进度已自动保存</p>
+            <p class="footer-hint"><i class="fas fa-info-circle"></i> 提示：进度会自动保存到浏览器本地存储，可导出备份</p>
+        </footer>
+    </div>
+
+    <div id="loadingOverlay" class="loading-overlay">
+        <div class="loading-content">
+            <div class="spinner"></div>
+            <p>正在加载题库，请稍候...</p>
+        </div>
+    </div>
+
+    <script src="question-data.js"></script>
+    <script src="script.js"></script>
+</body>
+</html>
