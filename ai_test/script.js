@@ -585,8 +585,21 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     
     function navigateToPrev() {
-        if (state.currentIndex > 0) {
-            navigateToQuestion(state.currentIndex - 1);
+        const filteredQuestions = getFilteredQuestions();
+        if (filteredQuestions.length === 0) return;
+        
+        // 找到当前题目在筛选列表中的位置
+        const currentQuestion = state.questions[state.currentIndex];
+        const currentFilteredIndex = filteredQuestions.findIndex(q => q.id === currentQuestion.id);
+        
+        if (currentFilteredIndex > 0) {
+            // 上一个筛选题目
+            const prevQuestion = filteredQuestions[currentFilteredIndex - 1];
+            navigateToQuestion(prevQuestion.id - 1); // 题目ID从1开始，索引从0开始
+        } else if (currentFilteredIndex === -1 && filteredQuestions.length > 0) {
+            // 当前题目不在筛选列表中，跳转到筛选列表的最后一题
+            const lastQuestion = filteredQuestions[filteredQuestions.length - 1];
+            navigateToQuestion(lastQuestion.id - 1);
         }
     }
     
@@ -597,10 +610,22 @@ document.addEventListener('DOMContentLoaded', function() {
             submitAnswer();
         }
         
-        if (state.currentIndex < state.questions.length - 1) {
-            navigateToQuestion(state.currentIndex + 1);
-        } else {
-            showToast('已经是最后一题了', 'info');
+        const filteredQuestions = getFilteredQuestions();
+        if (filteredQuestions.length === 0) return;
+        
+        // 找到当前题目在筛选列表中的位置
+        const currentFilteredIndex = filteredQuestions.findIndex(q => q.id === currentQuestion.id);
+        
+        if (currentFilteredIndex >= 0 && currentFilteredIndex < filteredQuestions.length - 1) {
+            // 下一个筛选题目
+            const nextQuestion = filteredQuestions[currentFilteredIndex + 1];
+            navigateToQuestion(nextQuestion.id - 1);
+        } else if (currentFilteredIndex === -1 && filteredQuestions.length > 0) {
+            // 当前题目不在筛选列表中，跳转到筛选列表的第一题
+            const firstQuestion = filteredQuestions[0];
+            navigateToQuestion(firstQuestion.id - 1);
+        } else if (currentFilteredIndex === filteredQuestions.length - 1) {
+            showToast('已经是筛选列表的最后一题了', 'info');
         }
     }
 
@@ -613,13 +638,7 @@ document.addEventListener('DOMContentLoaded', function() {
         const endIndex = Math.min(startIndex + state.pageSize, state.questions.length);
         
         // 根据筛选条件过滤题目
-        let filteredQuestions = state.questions;
-        if (state.filter !== 'all') {
-            filteredQuestions = state.questions.filter(q => {
-                if (state.filter === 'wrongbook') return q.isWrongBook;
-                return q.status === state.filter;
-            });
-        }
+        const filteredQuestions = getFilteredQuestions();
         
         // 生成按钮
         for (let i = startIndex; i < endIndex; i++) {
@@ -641,12 +660,17 @@ document.addEventListener('DOMContentLoaded', function() {
             }
             
             // 如果题目被筛选隐藏，添加特殊样式
-            if (state.filter !== 'all' && !filteredQuestions.includes(question)) {
+            if (!filteredQuestions.includes(question)) {
                 button.style.opacity = '0.3';
                 button.style.pointerEvents = 'none';
             }
             
-            button.addEventListener('click', () => navigateToQuestion(i));
+            button.addEventListener('click', () => {
+                if (!filteredQuestions.includes(question)) {
+                    return; // 题目被筛选隐藏，不导航
+                }
+                navigateToQuestion(i);
+            });
             dom.answerSheetGrid.appendChild(button);
         }
         
@@ -698,10 +722,31 @@ document.addEventListener('DOMContentLoaded', function() {
         dom.progressText.textContent = `${progressPercent}% 完成`;
     }
     
+    function getFilteredQuestions() {
+        if (state.filter === 'all') {
+            return state.questions;
+        }
+        return state.questions.filter(q => {
+            if (state.filter === 'wrongbook') return q.isWrongBook;
+            return q.status === state.filter;
+        });
+    }
+    
     function applyFilter(filterValue) {
         state.filter = filterValue;
         state.currentPage = 1; // 回到第一页
+        
+        // 检查当前题目是否在筛选列表中
+        const filteredQuestions = getFilteredQuestions();
+        const currentQuestion = state.questions[state.currentIndex];
+        if (filteredQuestions.length > 0 && !filteredQuestions.includes(currentQuestion)) {
+            // 当前题目被筛选隐藏，跳转到筛选列表的第一题
+            const firstQuestion = filteredQuestions[0];
+            state.currentIndex = firstQuestion.id - 1;
+        }
+        
         renderAnswerSheet();
+        renderQuestion(); // 更新显示的题目
         saveProgress();
     }
 
