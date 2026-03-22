@@ -563,6 +563,12 @@ main {
     border-bottom: 1px solid var(--border-color);
 }
 
+.exam-controls {
+    margin-bottom: 15px;
+    padding-bottom: 15px;
+    border-bottom: 1px solid var(--border-color);
+}
+
 .mode-selector label {
     display: block;
     margin-bottom: 8px;

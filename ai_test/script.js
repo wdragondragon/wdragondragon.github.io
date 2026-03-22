@@ -71,6 +71,8 @@ document.addEventListener('DOMContentLoaded', function() {
         filterRadios: document.querySelectorAll('input[name="filter"]'),
         categorySelect: document.getElementById('categorySelect'),
         modeSelect: document.getElementById('modeSelect'),
+        examControls: document.getElementById('examControls'),
+        regenerateExamBtn: document.getElementById('regenerateExamBtn'),
         
         // 题型统计
         singleCount: document.getElementById('singleCount'),
@@ -218,6 +220,22 @@ document.addEventListener('DOMContentLoaded', function() {
         questions.push(question);
     }
 
+    // ==================== 题目深拷贝函数 ====================
+    function cloneQuestion(question) {
+        return {
+            id: question.id,
+            type: question.type,
+            question: question.question,
+            options: question.options ? [...question.options.map(opt => ({...opt}))] : [],
+            answer: question.answer,
+            explanation: question.explanation,
+            userAnswer: null,  // 新副本总是重置答题状态
+            status: STATUS.UNANSWERED,
+            isWrongBook: question.isWrongBook,
+            originalQuestion: question  // 保留对原始题目的引用，用于同步错题集状态
+        };
+    }
+
     // ==================== 考试模式题目生成 ====================
     function generateExamQuestions() {
         console.log('开始生成考试模式题目...');
@@ -255,7 +273,8 @@ document.addEventListener('DOMContentLoaded', function() {
         examQuestions.sort((a, b) => a.id - b.id);
         
         console.log(`考试模式题目生成完成: 共 ${examQuestions.length} 道题目 (${selectedSingle.length} 单选题, ${selectedMultiple.length} 多选题, ${selectedJudgment.length} 判断题)`);
-        return examQuestions;
+        // 返回克隆的题目，包含对原始题目的引用
+        return examQuestions.map(q => cloneQuestion(q));
     }
 
     // ==================== 状态管理 ====================
@@ -275,6 +294,20 @@ document.addEventListener('DOMContentLoaded', function() {
                 mode: state.mode,
                 // 保存考试模式题目ID，以便恢复相同的题目集合
                 examQuestionIds: state.examQuestions.map(q => q.id),
+                // 保存考试模式题目进度
+                examQuestionsProgress: state.examQuestions.map(q => ({
+                    id: q.id,
+                    userAnswer: q.userAnswer,
+                    status: q.status,
+                    isWrongBook: q.isWrongBook
+                })),
+                // 保存复习模式题目进度
+                reviewQuestionsProgress: state.reviewQuestions.map(q => ({
+                    id: q.id,
+                    userAnswer: q.userAnswer,
+                    status: q.status,
+                    isWrongBook: q.isWrongBook
+                })),
                 lastSaveTime: new Date().toISOString()
             };
             localStorage.setItem(STORAGE_KEY, JSON.stringify(progress));
@@ -324,14 +357,30 @@ document.addEventListener('DOMContentLoaded', function() {
                 // 尝试从保存的进度中恢复考试题目列表
                 if (progress.examQuestionIds && Array.isArray(progress.examQuestionIds)) {
                     // 根据保存的题目ID构建考试题目列表
-                    state.examQuestions = progress.examQuestionIds
+                    const examOriginals = progress.examQuestionIds
                         .map(id => state.questions.find(q => q.id === id))
                         .filter(q => q !== undefined);
-                    console.log('从进度恢复考试模式题目集，共', state.examQuestions.length, '道题目');
-                    // 确保按题号排序
-                    state.examQuestions.sort((a, b) => a.id - b.id);
-                    
-                    if (state.examQuestions.length === 0) {
+                    if (examOriginals.length > 0) {
+                        // 创建克隆题目并应用保存的进度
+                        state.examQuestions = examOriginals.map(original => {
+                            const cloned = cloneQuestion(original);
+                            // 查找保存的进度
+                            const savedProgress = progress.examQuestionsProgress?.find(p => p.id === original.id);
+                            if (savedProgress) {
+                                cloned.userAnswer = savedProgress.userAnswer;
+                                cloned.status = savedProgress.status;
+                                cloned.isWrongBook = savedProgress.isWrongBook;
+                                // 同步错题集状态到原始题目
+                                if (savedProgress.isWrongBook) {
+                                    original.isWrongBook = true;
+                                }
+                            }
+                            return cloned;
+                        });
+                        console.log('从进度恢复考试模式题目集，共', state.examQuestions.length, '道题目');
+                        // 确保按题号排序
+                        state.examQuestions.sort((a, b) => a.id - b.id);
+                    } else {
                         // 如果恢复失败（例如题目数据变化），生成新的考试题目
                         state.examQuestions = generateExamQuestions();
                         console.log('恢复失败，生成新的考试题目集，共', state.examQuestions.length, '道题目');
@@ -343,7 +392,19 @@ document.addEventListener('DOMContentLoaded', function() {
                 }
                 state.currentQuestions = [...state.examQuestions];
             } else if (state.mode === 'review') {
-                    state.reviewQuestions = state.questions.filter(q => q.isWrongBook).sort((a, b) => a.id - b.id);
+                // 恢复复习模式题目
+                const wrongOriginals = state.questions.filter(q => q.isWrongBook).sort((a, b) => a.id - b.id);
+                state.reviewQuestions = wrongOriginals.map(original => {
+                    const cloned = cloneQuestion(original);
+                    // 查找保存的进度
+                    const savedProgress = progress.reviewQuestionsProgress?.find(p => p.id === original.id);
+                    if (savedProgress) {
+                        cloned.userAnswer = savedProgress.userAnswer;
+                        cloned.status = savedProgress.status;
+                        cloned.isWrongBook = savedProgress.isWrongBook;
+                    }
+                    return cloned;
+                });
                 state.currentQuestions = [...state.reviewQuestions];
                 console.log('错题集复习模式已初始化，共', state.reviewQuestions.length, '道错题');
             } else {
@@ -355,6 +416,29 @@ document.addEventListener('DOMContentLoaded', function() {
             console.error('加载进度失败:', error);
             return false;
         }
+    }
+    
+    // ==================== 题目获取辅助函数 ====================
+    function getCurrentQuestion() {
+        if (state.mode === 'exam' && state.examQuestions.length > 0) {
+            // 考试模式：从考试题目列表中查找当前索引对应的题目
+            // 需要根据state.currentIndex在原始题目列表中找到对应题号，然后在考试题目中查找
+            const originalQuestion = state.questions[state.currentIndex];
+            if (!originalQuestion) return null;
+            return state.examQuestions.find(q => q.id === originalQuestion.id) || originalQuestion;
+        } else if (state.mode === 'review' && state.reviewQuestions.length > 0) {
+            // 复习模式：从复习题目列表中查找当前索引对应的题目
+            const originalQuestion = state.questions[state.currentIndex];
+            if (!originalQuestion) return null;
+            return state.reviewQuestions.find(q => q.id === originalQuestion.id) || originalQuestion;
+        } else {
+            // 正常模式：直接使用原始题目
+            return state.questions[state.currentIndex];
+        }
+    }
+    
+    function getOriginalQuestionById(questionId) {
+        return state.questions.find(q => q.id === questionId);
     }
     
     function resetProgress() {
@@ -376,6 +460,11 @@ document.addEventListener('DOMContentLoaded', function() {
             // 更新模式选择框
             if (dom.modeSelect) {
                 dom.modeSelect.value = 'normal';
+            }
+            
+            // 更新考试控制按钮的显示状态
+            if (dom.examControls) {
+                dom.examControls.style.display = 'none';
             }
             
             localStorage.removeItem(STORAGE_KEY);
@@ -457,7 +546,9 @@ document.addEventListener('DOMContentLoaded', function() {
     function renderQuestion() {
         if (state.questions.length === 0) return;
         
-        const question = state.questions[state.currentIndex];
+        const question = getCurrentQuestion();
+        if (!question) return;
+        
         const filteredQuestions = getFilteredQuestions();
         
         // 计算当前题目在筛选列表中的位置
@@ -605,7 +696,8 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // ==================== 答题逻辑 ====================
     function selectAnswer(answer) {
-        const question = state.questions[state.currentIndex];
+        const question = getCurrentQuestion();
+        if (!question) return;
         
         if (question.status === STATUS.CORRECT || question.status === STATUS.INCORRECT) {
             // 如果已经提交过，允许重新选择
@@ -650,7 +742,11 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     
     function submitAnswer() {
-        const question = state.questions[state.currentIndex];
+        const question = getCurrentQuestion();
+        if (!question) {
+            showToast('题目加载失败', 'error');
+            return;
+        }
         
         if (!question.userAnswer) {
             showToast('请先选择答案', 'warning');
@@ -676,7 +772,13 @@ document.addEventListener('DOMContentLoaded', function() {
         if (!isCorrect) {
             // 考试模式下自动加入错题集
             if (state.mode === 'exam') {
+                // 更新克隆题目的错题集标记
                 question.isWrongBook = true;
+                // 同步到原始题目
+                const originalQuestion = question.originalQuestion || getOriginalQuestionById(question.id);
+                if (originalQuestion) {
+                    originalQuestion.isWrongBook = true;
+                }
             }
             // 正常模式和复习模式下，用户可以手动添加到错题集
         }
@@ -704,8 +806,23 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     
     function toggleWrongBook() {
-        const question = state.questions[state.currentIndex];
+        const question = getCurrentQuestion();
+        if (!question) return;
+        
+        // 切换错题集标记
         question.isWrongBook = !question.isWrongBook;
+        
+        // 同步到原始题目
+        const originalQuestion = question.originalQuestion || getOriginalQuestionById(question.id);
+        if (originalQuestion) {
+            originalQuestion.isWrongBook = question.isWrongBook;
+        }
+        
+        // 如果处于复习模式且移出错题集，需要从复习列表中移除该题目
+        if (state.mode === 'review' && !question.isWrongBook && state.reviewQuestions.length > 0) {
+            state.reviewQuestions = state.reviewQuestions.filter(q => q.id !== question.id);
+            state.currentQuestions = [...state.reviewQuestions];
+        }
         
         updateWrongBookButtons(question);
         updateStats();
@@ -1059,7 +1176,7 @@ document.addEventListener('DOMContentLoaded', function() {
         // 检查当前题目是否在筛选列表中
         const filteredQuestions = getFilteredQuestions();
         const currentQuestion = state.questions[state.currentIndex];
-        if (filteredQuestions.length > 0 && !filteredQuestions.includes(currentQuestion)) {
+        if (filteredQuestions.length > 0 && !filteredQuestions.find(q => q.id === currentQuestion.id)) {
             // 当前题目被筛选隐藏，跳转到筛选列表的第一题
             const firstQuestion = filteredQuestions[0];
             state.currentIndex = firstQuestion.id - 1;
@@ -1078,7 +1195,7 @@ document.addEventListener('DOMContentLoaded', function() {
         // 检查当前题目是否在筛选列表中
         const filteredQuestions = getFilteredQuestions();
         const currentQuestion = state.questions[state.currentIndex];
-        if (filteredQuestions.length > 0 && !filteredQuestions.includes(currentQuestion)) {
+        if (filteredQuestions.length > 0 && !filteredQuestions.find(q => q.id === currentQuestion.id)) {
             // 当前题目被筛选隐藏，跳转到筛选列表的第一题
             const firstQuestion = filteredQuestions[0];
             state.currentIndex = firstQuestion.id - 1;
@@ -1096,30 +1213,20 @@ document.addEventListener('DOMContentLoaded', function() {
         
         // 根据模式设置当前题目列表
         if (modeValue === 'exam') {
-            // 考试模式：生成随机题目
-            state.examQuestions = generateExamQuestions();
+            // 考试模式：如果还没有考试题目，生成随机题目
+            if (state.examQuestions.length === 0) {
+                state.examQuestions = generateExamQuestions();
+                console.log('切换到考试模式，生成', state.examQuestions.length, '道题目');
+            } else {
+                console.log('切换到考试模式，使用现有考试题目，共', state.examQuestions.length, '道题目');
+            }
             state.currentQuestions = [...state.examQuestions];
             
-            // 重置考试题目的用户答题状态（不将练习模式的答案带入考试）
-            state.currentQuestions.forEach(q => {
-                q.userAnswer = null;
-                q.status = STATUS.UNANSWERED;
-                // 保留错题集标记，但不重置
-            });
-            
-            console.log('切换到考试模式，生成', state.examQuestions.length, '道题目');
-            
         } else if (modeValue === 'review') {
-            // 错题集复习模式：获取所有错题集题目
-            state.reviewQuestions = state.questions.filter(q => q.isWrongBook).sort((a, b) => a.id - b.id);
+            // 错题集复习模式：获取所有错题集题目并创建克隆副本
+            const wrongQuestions = state.questions.filter(q => q.isWrongBook).sort((a, b) => a.id - b.id);
+            state.reviewQuestions = wrongQuestions.map(q => cloneQuestion(q));
             state.currentQuestions = [...state.reviewQuestions];
-            
-            // 重置错题集题目的用户答题状态（不将练习模式的答案带入复习）
-            state.currentQuestions.forEach(q => {
-                q.userAnswer = null;
-                q.status = STATUS.UNANSWERED;
-                // 保留错题集标记
-            });
             
             console.log('切换到错题集复习模式，共有', state.reviewQuestions.length, '道错题');
             
@@ -1189,6 +1296,11 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         }
         
+        // 更新考试控制按钮的显示状态
+        if (dom.examControls) {
+            dom.examControls.style.display = (modeValue === 'exam') ? 'block' : 'none';
+        }
+        
         // 重新渲染UI
         renderAnswerSheet();
         renderQuestion();
@@ -1202,6 +1314,42 @@ document.addEventListener('DOMContentLoaded', function() {
             'review': '错题集复习'
         };
         showToast(`已切换到${modeNames[modeValue]}模式`);
+    }
+
+    // ==================== 考试模式控制 ====================
+    function regenerateExam() {
+        if (state.mode !== 'exam') {
+            showToast('当前不是考试模式', 'warning');
+            return;
+        }
+        
+        if (confirm('确定要重新生成考卷吗？当前考试进度将丢失。')) {
+            // 生成新的考试题目
+            state.examQuestions = generateExamQuestions();
+            state.currentQuestions = [...state.examQuestions];
+            
+            // 重置当前索引和筛选
+            state.currentIndex = 0;
+            state.filter = 'all';
+            state.categoryFilter = 'all';
+            state.currentPage = 1;
+            
+            // 更新筛选UI
+            dom.filterRadios.forEach(radio => {
+                if (radio.value === 'all') radio.checked = true;
+            });
+            if (dom.categorySelect) {
+                dom.categorySelect.value = 'all';
+            }
+            
+            // 重新渲染UI
+            renderAnswerSheet();
+            renderQuestion();
+            updateStats();
+            saveProgress();
+            
+            showToast('考卷已重新生成', 'success');
+        }
     }
 
     // ==================== 工具函数 ====================
@@ -1347,6 +1495,10 @@ document.addEventListener('DOMContentLoaded', function() {
             
             state.questions = questions;
             loadProgress();
+            // 更新考试控制按钮的显示状态
+            if (dom.examControls) {
+                dom.examControls.style.display = (state.mode === 'exam') ? 'block' : 'none';
+            }
             updateStats();
             renderQuestion();
             renderAnswerSheet();
@@ -1374,6 +1526,11 @@ document.addEventListener('DOMContentLoaded', function() {
         dom.prevBtn.addEventListener('click', navigateToPrev);
         dom.submitBtn.addEventListener('click', submitAnswer);
         dom.nextBtn.addEventListener('click', navigateToNext);
+        
+        // 考试控制按钮
+        if (dom.regenerateExamBtn) {
+            dom.regenerateExamBtn.addEventListener('click', regenerateExam);
+        }
         
         // 错题集按钮
         dom.toggleWrongBook.addEventListener('click', toggleWrongBook);
@@ -1440,6 +1597,20 @@ document.addEventListener('DOMContentLoaded', function() {
             
             // 模式选择监听器
             if (dom.modeSelect) {
+                // 清空现有选项
+                dom.modeSelect.innerHTML = '';
+                // 添加模式选项
+                const modes = [
+                    { value: 'normal', label: '正常练习' },
+                    { value: 'exam', label: '考试模式 (100题)' },
+                    { value: 'review', label: '错题集复习' }
+                ];
+                modes.forEach(mode => {
+                    const option = document.createElement('option');
+                    option.value = mode.value;
+                    option.textContent = mode.label;
+                    dom.modeSelect.appendChild(option);
+                });
                 dom.modeSelect.value = state.mode;
                 dom.modeSelect.addEventListener('change', (e) => {
                     applyMode(e.target.value);
