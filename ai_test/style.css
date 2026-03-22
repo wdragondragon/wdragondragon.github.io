@@ -101,6 +101,14 @@ header h1 {
     background-color: var(--danger-color);
 }
 
+.btn-primary {
+    background-color: var(--success-color);
+}
+
+.btn-primary:hover {
+    background-color: #219653;
+}
+
 /* 主内容区域 */
 main {
     display: flex;

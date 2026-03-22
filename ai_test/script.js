@@ -54,6 +54,7 @@ document.addEventListener('DOMContentLoaded', function() {
         
         // 导航按钮
         prevBtn: document.getElementById('prevBtn'),
+        submitBtn: document.getElementById('submitBtn'),
         nextBtn: document.getElementById('nextBtn'),
         
         // 统计
@@ -275,6 +276,8 @@ document.addEventListener('DOMContentLoaded', function() {
                 categoryFilter: state.categoryFilter,
                 currentPage: state.currentPage,
                 mode: state.mode,
+                // 保存考试模式题目ID，以便恢复相同的题目集合
+                examQuestionIds: state.examQuestions.map(q => q.id),
                 lastSaveTime: new Date().toISOString()
             };
             localStorage.setItem(STORAGE_KEY, JSON.stringify(progress));
@@ -321,26 +324,28 @@ document.addEventListener('DOMContentLoaded', function() {
             
             // 初始化模式相关的题目集（不重置UI，因为UI会在loadDefaultQuestions中更新）
             if (state.mode === 'exam') {
-                state.examQuestions = generateExamQuestions();
+                // 尝试从保存的进度中恢复考试题目列表
+                if (progress.examQuestionIds && Array.isArray(progress.examQuestionIds)) {
+                    // 根据保存的题目ID构建考试题目列表
+                    state.examQuestions = progress.examQuestionIds
+                        .map(id => state.questions.find(q => q.id === id))
+                        .filter(q => q !== undefined);
+                    console.log('从进度恢复考试模式题目集，共', state.examQuestions.length, '道题目');
+                    
+                    if (state.examQuestions.length === 0) {
+                        // 如果恢复失败（例如题目数据变化），生成新的考试题目
+                        state.examQuestions = generateExamQuestions();
+                        console.log('恢复失败，生成新的考试题目集，共', state.examQuestions.length, '道题目');
+                    }
+                } else {
+                    // 没有保存的考试题目ID，生成新的
+                    state.examQuestions = generateExamQuestions();
+                    console.log('生成新的考试模式题目集，共', state.examQuestions.length, '道题目');
+                }
                 state.currentQuestions = [...state.examQuestions];
-                
-                // 重置考试题目的用户答题状态（不将练习模式的答案带入考试）
-                state.currentQuestions.forEach(q => {
-                    q.userAnswer = null;
-                    q.status = STATUS.UNANSWERED;
-                });
-                
-                console.log('考试模式题目集已初始化，共', state.examQuestions.length, '道题目');
             } else if (state.mode === 'review') {
                 state.reviewQuestions = state.questions.filter(q => q.isWrongBook);
                 state.currentQuestions = [...state.reviewQuestions];
-                
-                // 重置错题集题目的用户答题状态（不将练习模式的答案带入复习）
-                state.currentQuestions.forEach(q => {
-                    q.userAnswer = null;
-                    q.status = STATUS.UNANSWERED;
-                });
-                
                 console.log('错题集复习模式已初始化，共', state.reviewQuestions.length, '道错题');
             } else {
                 state.currentQuestions = [];
@@ -718,12 +723,6 @@ document.addEventListener('DOMContentLoaded', function() {
     function navigateToQuestion(index) {
         if (index < 0 || index >= state.questions.length) return;
         
-        // 提交当前题目的答案（如果正在答题中）
-        const currentQuestion = state.questions[state.currentIndex];
-        if (currentQuestion.status === STATUS.ANSWERING) {
-            submitAnswer();
-        }
-        
         state.currentIndex = index;
         renderQuestion();
         updateAnswerSheetCurrent();
@@ -737,11 +736,11 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     
     function navigateToPrev() {
+        const currentQuestion = state.questions[state.currentIndex];
         const filteredQuestions = getFilteredQuestions();
         if (filteredQuestions.length === 0) return;
         
         // 找到当前题目在筛选列表中的位置
-        const currentQuestion = state.questions[state.currentIndex];
         const currentFilteredIndex = filteredQuestions.findIndex(q => q.id === currentQuestion.id);
         
         if (currentFilteredIndex > 0) {
@@ -756,21 +755,7 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     
     function navigateToNext() {
-        // 如果当前题目正在答题中，先提交
         const currentQuestion = state.questions[state.currentIndex];
-        if (currentQuestion.status === STATUS.ANSWERING) {
-            submitAnswer();
-        }
-        
-        // 复习模式特殊处理：随机选择错题
-        if (state.mode === 'review' && state.reviewQuestions.length > 0) {
-            // 从错题集中随机选择一题
-            const randomIndex = Math.floor(Math.random() * state.reviewQuestions.length);
-            const randomQuestion = state.reviewQuestions[randomIndex];
-            navigateToQuestion(randomQuestion.id - 1);
-            return;
-        }
-        
         const filteredQuestions = getFilteredQuestions();
         if (filteredQuestions.length === 0) return;
         
@@ -1388,12 +1373,8 @@ document.addEventListener('DOMContentLoaded', function() {
     function initEventListeners() {
         // 导航按钮
         dom.prevBtn.addEventListener('click', navigateToPrev);
+        dom.submitBtn.addEventListener('click', submitAnswer);
         dom.nextBtn.addEventListener('click', navigateToNext);
-        
-        // 提交答案（点击下一题时会自动提交）
-        dom.nextBtn.addEventListener('click', () => {
-            // 在navigateToNext中已经处理了提交逻辑
-        });
         
         // 错题集按钮
         dom.toggleWrongBook.addEventListener('click', toggleWrongBook);
