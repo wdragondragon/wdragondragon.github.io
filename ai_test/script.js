@@ -251,11 +251,8 @@ document.addEventListener('DOMContentLoaded', function() {
         // 合并所有题目
         const examQuestions = [...selectedSingle, ...selectedMultiple, ...selectedJudgment];
         
-        // 再次随机排序
-        for (let i = examQuestions.length - 1; i > 0; i--) {
-            const j = Math.floor(Math.random() * (i + 1));
-            [examQuestions[i], examQuestions[j]] = [examQuestions[j], examQuestions[i]];
-        }
+        // 按题号排序
+        examQuestions.sort((a, b) => a.id - b.id);
         
         console.log(`考试模式题目生成完成: 共 ${examQuestions.length} 道题目 (${selectedSingle.length} 单选题, ${selectedMultiple.length} 多选题, ${selectedJudgment.length} 判断题)`);
         return examQuestions;
@@ -331,6 +328,8 @@ document.addEventListener('DOMContentLoaded', function() {
                         .map(id => state.questions.find(q => q.id === id))
                         .filter(q => q !== undefined);
                     console.log('从进度恢复考试模式题目集，共', state.examQuestions.length, '道题目');
+                    // 确保按题号排序
+                    state.examQuestions.sort((a, b) => a.id - b.id);
                     
                     if (state.examQuestions.length === 0) {
                         // 如果恢复失败（例如题目数据变化），生成新的考试题目
@@ -344,7 +343,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 }
                 state.currentQuestions = [...state.examQuestions];
             } else if (state.mode === 'review') {
-                state.reviewQuestions = state.questions.filter(q => q.isWrongBook);
+                    state.reviewQuestions = state.questions.filter(q => q.isWrongBook).sort((a, b) => a.id - b.id);
                 state.currentQuestions = [...state.reviewQuestions];
                 console.log('错题集复习模式已初始化，共', state.reviewQuestions.length, '道错题');
             } else {
@@ -1112,7 +1111,7 @@ document.addEventListener('DOMContentLoaded', function() {
             
         } else if (modeValue === 'review') {
             // 错题集复习模式：获取所有错题集题目
-            state.reviewQuestions = state.questions.filter(q => q.isWrongBook);
+            state.reviewQuestions = state.questions.filter(q => q.isWrongBook).sort((a, b) => a.id - b.id);
             state.currentQuestions = [...state.reviewQuestions];
             
             // 重置错题集题目的用户答题状态（不将练习模式的答案带入复习）
