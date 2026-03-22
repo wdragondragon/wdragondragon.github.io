@@ -130,14 +130,160 @@ main {
     padding: 20px;
     box-shadow: var(--shadow);
     display: flex;
-    justify-content: space-between;
-    align-items: center;
+    flex-direction: column;
+    gap: 15px;
 }
 
 .question-info {
     display: flex;
-    flex-direction: column;
-    gap: 5px;
+    justify-content: space-between;
+    align-items: center;
+    gap: 10px;
+}
+
+.question-stats-summary {
+    background-color: white;
+    border-radius: var(--border-radius);
+    padding: 0;
+    border: 1px solid var(--border-color);
+    overflow: hidden;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+}
+
+/* 题型统计行 - 顶部行 */
+.stats-summary-row.type-stats {
+    background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+    padding: 10px 15px;
+    border-bottom: 1px solid var(--border-color);
+}
+
+/* 状态统计行 - 底部行 */
+.stats-summary-row.status-stats {
+    background-color: white;
+    padding: 10px 15px;
+}
+
+.stats-summary-row {
+    display: flex;
+    justify-content: space-between;
+    gap: 15px;
+}
+
+.stats-summary-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-size: 13px;
+    flex: 1;
+    padding: 4px 0;
+}
+
+.stats-summary-label {
+    color: var(--secondary-color);
+    font-weight: 600;
+    white-space: nowrap;
+    position: relative;
+    padding-left: 18px;
+}
+
+/* 题型标签的图标 */
+.stats-summary-row.type-stats .stats-summary-label::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 12px;
+    height: 12px;
+    border-radius: 3px;
+}
+
+.stats-summary-row.type-stats .stats-summary-item:nth-child(1) .stats-summary-label::before {
+    background-color: #3498db; /* 单选题 - 蓝色 */
+}
+
+.stats-summary-row.type-stats .stats-summary-item:nth-child(2) .stats-summary-label::before {
+    background-color: #9b59b6; /* 多选题 - 紫色 */
+}
+
+.stats-summary-row.type-stats .stats-summary-item:nth-child(3) .stats-summary-label::before {
+    background-color: #2ecc71; /* 判断题 - 绿色 */
+}
+
+/* 状态统计的颜色编码 */
+.stats-summary-row.status-stats .stats-summary-item:nth-child(1) .stats-summary-count {
+    color: var(--gray-color); /* 未作答 - 灰色 */
+}
+
+.stats-summary-row.status-stats .stats-summary-item:nth-child(2) .stats-summary-count {
+    color: var(--success-color); /* 正确 - 绿色 */
+}
+
+.stats-summary-row.status-stats .stats-summary-item:nth-child(3) .stats-summary-count {
+    color: var(--danger-color); /* 错误 - 红色 */
+}
+
+.stats-summary-row.status-stats .stats-summary-item:nth-child(4) .stats-summary-count {
+    color: var(--warning-color); /* 错题集 - 橙色 */
+}
+
+.stats-summary-count {
+    font-weight: 700;
+    font-family: 'Courier New', monospace, 'SF Mono', Monaco, 'Roboto Mono', monospace;
+    font-size: 14px;
+    min-width: 45px;
+    text-align: right;
+    background-color: #f8f9fa;
+    padding: 2px 6px;
+    border-radius: 3px;
+    border: 1px solid #e9ecef;
+}
+
+/* 题型统计的数字颜色 */
+.stats-summary-row.type-stats .stats-summary-count {
+    color: var(--primary-color);
+    background-color: white;
+    border-color: #dee2e6;
+}
+
+/* 悬停效果 */
+.stats-summary-item:hover .stats-summary-count {
+    transform: translateY(-1px);
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.stats-summary-item {
+    transition: all 0.2s ease;
+}
+
+.stats-summary-count {
+    transition: all 0.2s ease;
+}
+
+/* 添加分隔线 */
+.stats-summary-row.status-stats .stats-summary-item:not(:last-child)::after {
+    content: '';
+    position: absolute;
+    right: -7.5px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 1px;
+    height: 16px;
+    background-color: #e9ecef;
+}
+
+.stats-summary-row.status-stats .stats-summary-item {
+    position: relative;
+}
+
+.stats-summary-row.status-stats .stats-summary-item:last-child::after {
+    display: none;
+}
+
+.question-actions {
+    display: flex;
+    justify-content: center;
+    gap: 20px;
 }
 
 .question-type {
@@ -152,11 +298,6 @@ main {
 .question-number {
     color: var(--gray-color);
     font-size: 16px;
-}
-
-.question-actions {
-    display: flex;
-    gap: 10px;
 }
 
 /* 题目内容 */
@@ -577,6 +718,113 @@ footer {
     }
 }
 
+/* 知识点分类筛选器样式 */
+.category-filter {
+    margin-top: 15px;
+    padding-top: 15px;
+    border-top: 1px solid var(--border-color);
+}
+
+.category-filter label {
+    display: block;
+    margin-bottom: 8px;
+    font-weight: 600;
+    color: var(--secondary-color);
+    font-size: 14px;
+}
+
+.category-filter label i {
+    margin-right: 6px;
+    color: var(--primary-color);
+}
+
+.category-select {
+    width: 100%;
+    padding: 10px 12px;
+    border: 1px solid var(--border-color);
+    border-radius: var(--border-radius);
+    background-color: white;
+    font-size: 14px;
+    color: #333;
+    transition: border-color 0.2s;
+    cursor: pointer;
+}
+
+.category-select:focus {
+    outline: none;
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 3px rgba(52, 152, 219, 0.1);
+}
+
+.category-select:hover {
+    border-color: #bbb;
+}
+
+/* 题型统计样式 */
+.question-type-stats {
+    margin-top: 12px;
+    padding: 10px;
+    background-color: #f8f9fa;
+    border-radius: var(--border-radius);
+    border: 1px solid var(--border-color);
+}
+
+.type-stat-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 6px;
+    font-size: 13px;
+}
+
+.type-stat-item:last-child {
+    margin-bottom: 0;
+}
+
+.type-stat-label {
+    color: var(--secondary-color);
+    font-weight: 500;
+}
+
+.type-stat-count {
+    color: var(--primary-color);
+    font-weight: 600;
+    font-family: 'Courier New', monospace;
+}
+
+/* 知识点分类状态统计样式 */
+.category-stats {
+    margin-top: 10px;
+    padding: 10px;
+    background-color: #f0f8ff;
+    border-radius: var(--border-radius);
+    border: 1px solid #d1e7ff;
+}
+
+.category-stat-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 5px;
+    font-size: 12px;
+}
+
+.category-stat-item:last-child {
+    margin-bottom: 0;
+}
+
+.category-stat-label {
+    color: #2c5282;
+    font-weight: 500;
+}
+
+.category-stat-count {
+    color: #2b6cb0;
+    font-weight: 700;
+    font-family: 'Courier New', monospace;
+    font-size: 13px;
+}
+
 @media (max-width: 768px) {
     .container {
         padding: 10px;
@@ -592,6 +840,58 @@ footer {
         flex-direction: column;
         gap: 15px;
         text-align: center;
+    }
+    
+    .question-stats-summary {
+        margin: 0 -5px;
+        border-radius: 8px;
+    }
+    
+    .stats-summary-row.type-stats {
+        flex-wrap: nowrap;
+        gap: 8px;
+        padding: 8px 10px;
+    }
+    
+    .stats-summary-row.status-stats {
+        flex-wrap: wrap;
+        gap: 8px;
+        padding: 8px 10px;
+    }
+    
+    .stats-summary-row.status-stats .stats-summary-item {
+        flex: 0 0 calc(50% - 4px);
+        justify-content: space-between;
+        font-size: 11px;
+        padding: 3px 0;
+    }
+    
+    /* 在平板端隐藏分隔线 */
+    .stats-summary-row.status-stats .stats-summary-item::after {
+        display: none;
+    }
+    
+    .stats-summary-row.type-stats .stats-summary-item {
+        flex: 1;
+        justify-content: space-between;
+        font-size: 11px;
+        padding: 3px 0;
+    }
+    
+    .stats-summary-row.type-stats .stats-summary-label::before {
+        width: 10px;
+        height: 10px;
+    }
+    
+    .stats-summary-label {
+        font-size: 11px;
+        padding-left: 15px;
+    }
+    
+    .stats-summary-count {
+        font-size: 11px;
+        min-width: 32px;
+        padding: 1px 4px;
     }
     
     .stats-grid {
@@ -610,6 +910,75 @@ footer {
     
     .answer-sheet-grid {
         grid-template-columns: repeat(5, 1fr);
+    }
+    
+    .question-stats-summary {
+        border-radius: 6px;
+        margin: 0;
+    }
+    
+    .stats-summary-row.type-stats,
+    .stats-summary-row.status-stats {
+        flex-direction: column;
+        gap: 6px;
+        padding: 10px;
+    }
+    
+    .stats-summary-row.type-stats {
+        background: linear-gradient(135deg, #f0f3f5 0%, #e1e7eb 100%);
+    }
+    
+    .stats-summary-item {
+        flex: 1 1 100%;
+        justify-content: space-between;
+        font-size: 12px;
+        padding: 4px 0;
+        border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+    }
+    
+    /* 在手机端隐藏分隔线 */
+    .stats-summary-row.status-stats .stats-summary-item::after {
+        display: none;
+    }
+    
+    .stats-summary-row.status-stats .stats-summary-item:last-child {
+        border-bottom: none;
+    }
+    
+    .stats-summary-row.type-stats .stats-summary-item {
+        border-bottom: 1px solid rgba(255, 255, 255, 0.3);
+    }
+    
+    .stats-summary-row.type-stats .stats-summary-item:last-child {
+        border-bottom: none;
+    }
+    
+    .stats-summary-label {
+        font-size: 12px;
+        font-weight: 600;
+        padding-left: 20px;
+    }
+    
+    .stats-summary-row.type-stats .stats-summary-label::before {
+        width: 12px;
+        height: 12px;
+        border-radius: 2px;
+    }
+    
+    .stats-summary-count {
+        font-size: 13px;
+        min-width: 40px;
+        padding: 3px 8px;
+        font-weight: 800;
+    }
+    
+    .question-actions {
+        flex-direction: column;
+        gap: 10px;
+    }
+    
+    .question-actions .btn {
+        width: 100%;
     }
     
     .judgment-options {

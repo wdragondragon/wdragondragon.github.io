@@ -4,7 +4,8 @@ document.addEventListener('DOMContentLoaded', function() {
     const state = {
         questions: [],           // 所有题目数组
         currentIndex: 0,         // 当前题目索引（0-based）
-        filter: 'all',           // 当前筛选条件
+        filter: 'all',           // 当前筛选条件（答题状态）
+        categoryFilter: 'all',   // 当前知识点分类筛选
         currentPage: 1,          // 答题卡当前页码
         pageSize: 100,           // 每页显示题数（10x10网格）
         isLoading: false         // 加载状态
@@ -63,6 +64,27 @@ document.addEventListener('DOMContentLoaded', function() {
         
         // 筛选
         filterRadios: document.querySelectorAll('input[name="filter"]'),
+        categorySelect: document.getElementById('categorySelect'),
+        
+        // 题型统计
+        singleCount: document.getElementById('singleCount'),
+        multipleCount: document.getElementById('multipleCount'),
+        judgeCount: document.getElementById('judgeCount'),
+        
+        // 分类状态统计
+        categoryUnansweredCount: document.getElementById('categoryUnansweredCount'),
+        categoryCorrectCount: document.getElementById('categoryCorrectCount'),
+        categoryIncorrectCount: document.getElementById('categoryIncorrectCount'),
+        categoryWrongBookCount: document.getElementById('categoryWrongBookCount'),
+        
+        // 摘要统计（导航按钮上方）
+        summarySingleCount: document.getElementById('summarySingleCount'),
+        summaryMultipleCount: document.getElementById('summaryMultipleCount'),
+        summaryJudgeCount: document.getElementById('summaryJudgeCount'),
+        summaryUnansweredCount: document.getElementById('summaryUnansweredCount'),
+        summaryCorrectCount: document.getElementById('summaryCorrectCount'),
+        summaryIncorrectCount: document.getElementById('summaryIncorrectCount'),
+        summaryWrongBookCount: document.getElementById('summaryWrongBookCount'),
         
         // 答题卡
         answerSheetGrid: document.getElementById('answerSheetGrid'),
@@ -202,6 +224,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 })),
                 currentIndex: state.currentIndex,
                 filter: state.filter,
+                categoryFilter: state.categoryFilter,
                 currentPage: state.currentPage,
                 lastSaveTime: new Date().toISOString()
             };
@@ -231,7 +254,13 @@ document.addEventListener('DOMContentLoaded', function() {
             
             state.currentIndex = progress.currentIndex || 0;
             state.filter = progress.filter || 'all';
+            state.categoryFilter = progress.categoryFilter || 'all';
             state.currentPage = progress.currentPage || 1;
+            
+            // 更新分类选择框的值
+            if (dom.categorySelect) {
+                dom.categorySelect.value = state.categoryFilter;
+            }
             
             console.log('进度已从本地存储加载');
             return true;
@@ -250,6 +279,7 @@ document.addEventListener('DOMContentLoaded', function() {
             });
             state.currentIndex = 0;
             state.filter = 'all';
+            state.categoryFilter = 'all';
             state.currentPage = 1;
             
             localStorage.removeItem(STORAGE_KEY);
@@ -332,10 +362,29 @@ document.addEventListener('DOMContentLoaded', function() {
         if (state.questions.length === 0) return;
         
         const question = state.questions[state.currentIndex];
+        const filteredQuestions = getFilteredQuestions();
+        
+        // 计算当前题目在筛选列表中的位置
+        let filteredIndex = -1;
+        if (filteredQuestions.length > 0) {
+            filteredIndex = filteredQuestions.findIndex(q => q.id === question.id);
+        }
+        
+        // 如果当前题目不在筛选列表中，但筛选列表不为空，跳转到第一题
+        if (filteredIndex === -1 && filteredQuestions.length > 0) {
+            const firstQuestion = filteredQuestions[0];
+            state.currentIndex = firstQuestion.id - 1;
+            renderQuestion(); // 重新渲染
+            return;
+        }
         
         // 更新题目信息
         dom.questionText.textContent = `${question.id}. ${question.question}`;
-        dom.questionNumber.textContent = `第 ${state.currentIndex + 1} 题 / 共 ${state.questions.length} 题`;
+        
+        // 显示筛选后的题目计数
+        const currentPosition = filteredIndex >= 0 ? filteredIndex + 1 : 0;
+        const totalFiltered = filteredQuestions.length;
+        dom.questionNumber.textContent = `第 ${currentPosition} 题 / 共 ${totalFiltered} 题`;
         
         // 更新题型显示
         let typeText = '单选题';
@@ -496,6 +545,9 @@ document.addEventListener('DOMContentLoaded', function() {
         // 重新渲染
         renderOptions(question);
         updateAnswerDisplay(question);
+        
+        // 更新统计信息
+        updateStats();
         
         // 自动保存
         saveProgress();
@@ -720,16 +772,148 @@ document.addEventListener('DOMContentLoaded', function() {
         
         dom.progressFill.style.width = `${progressPercent}%`;
         dom.progressText.textContent = `${progressPercent}% 完成`;
+        
+        // 同时更新题型统计和分类状态统计
+        updateQuestionTypeStats();
+        updateCategoryStats();
+    }
+    
+    function updateQuestionTypeStats() {
+        const filteredQuestions = getFilteredQuestions();
+        
+        // 初始化统计
+        const stats = {
+            [QUESTION_TYPES.SINGLE]: { total: 0, answered: 0 },
+            [QUESTION_TYPES.MULTIPLE]: { total: 0, answered: 0 },
+            [QUESTION_TYPES.JUDGE]: { total: 0, answered: 0 }
+        };
+        
+        // 统计筛选后的题目
+        filteredQuestions.forEach(q => {
+            if (stats[q.type]) {
+                stats[q.type].total++;
+                if (q.status !== STATUS.UNANSWERED) {
+                    stats[q.type].answered++;
+                }
+            }
+        });
+        
+        // 更新DOM显示
+        if (dom.singleCount) {
+            const single = stats[QUESTION_TYPES.SINGLE];
+            dom.singleCount.textContent = `${single.total}/${single.answered}/${single.total - single.answered}`;
+        }
+        
+        if (dom.multipleCount) {
+            const multiple = stats[QUESTION_TYPES.MULTIPLE];
+            dom.multipleCount.textContent = `${multiple.total}/${multiple.answered}/${multiple.total - multiple.answered}`;
+        }
+        
+        if (dom.judgeCount) {
+            const judge = stats[QUESTION_TYPES.JUDGE];
+            dom.judgeCount.textContent = `${judge.total}/${judge.answered}/${judge.total - judge.answered}`;
+        }
+        
+        // 同时更新摘要区域的题型统计
+        if (dom.summarySingleCount) {
+            const single = stats[QUESTION_TYPES.SINGLE];
+            dom.summarySingleCount.textContent = `${single.total}/${single.answered}/${single.total - single.answered}`;
+        }
+        
+        if (dom.summaryMultipleCount) {
+            const multiple = stats[QUESTION_TYPES.MULTIPLE];
+            dom.summaryMultipleCount.textContent = `${multiple.total}/${multiple.answered}/${multiple.total - multiple.answered}`;
+        }
+        
+        if (dom.summaryJudgeCount) {
+            const judge = stats[QUESTION_TYPES.JUDGE];
+            dom.summaryJudgeCount.textContent = `${judge.total}/${judge.answered}/${judge.total - judge.answered}`;
+        }
+    }
+    
+    function updateCategoryStats() {
+        const filteredQuestions = getFilteredQuestions();
+        
+        // 初始化统计
+        const stats = {
+            unanswered: 0,
+            correct: 0,
+            incorrect: 0,
+            wrongbook: 0
+        };
+        
+        // 统计筛选后的题目
+        filteredQuestions.forEach(q => {
+            if (q.status === STATUS.UNANSWERED) {
+                stats.unanswered++;
+            } else if (q.status === STATUS.CORRECT) {
+                stats.correct++;
+            } else if (q.status === STATUS.INCORRECT) {
+                stats.incorrect++;
+            }
+            
+            if (q.isWrongBook) {
+                stats.wrongbook++;
+            }
+        });
+        
+        // 更新DOM显示
+        if (dom.categoryUnansweredCount) {
+            dom.categoryUnansweredCount.textContent = stats.unanswered;
+        }
+        
+        if (dom.categoryCorrectCount) {
+            dom.categoryCorrectCount.textContent = stats.correct;
+        }
+        
+        if (dom.categoryIncorrectCount) {
+            dom.categoryIncorrectCount.textContent = stats.incorrect;
+        }
+        
+        if (dom.categoryWrongBookCount) {
+            dom.categoryWrongBookCount.textContent = stats.wrongbook;
+        }
+        
+        // 同时更新摘要区域的状态统计
+        if (dom.summaryUnansweredCount) {
+            dom.summaryUnansweredCount.textContent = stats.unanswered;
+        }
+        
+        if (dom.summaryCorrectCount) {
+            dom.summaryCorrectCount.textContent = stats.correct;
+        }
+        
+        if (dom.summaryIncorrectCount) {
+            dom.summaryIncorrectCount.textContent = stats.incorrect;
+        }
+        
+        if (dom.summaryWrongBookCount) {
+            dom.summaryWrongBookCount.textContent = stats.wrongbook;
+        }
     }
     
     function getFilteredQuestions() {
-        if (state.filter === 'all') {
-            return state.questions;
+        let filtered = state.questions;
+        
+        // 1. 应用答题状态筛选
+        if (state.filter !== 'all') {
+            filtered = filtered.filter(q => {
+                if (state.filter === 'wrongbook') return q.isWrongBook;
+                return q.status === state.filter;
+            });
         }
-        return state.questions.filter(q => {
-            if (state.filter === 'wrongbook') return q.isWrongBook;
-            return q.status === state.filter;
-        });
+        
+        // 2. 应用知识点分类筛选
+        if (state.categoryFilter !== 'all' && window.CATEGORY_MAPPING) {
+            const categoryQuestionNumbers = window.CATEGORY_MAPPING[state.categoryFilter];
+            if (categoryQuestionNumbers && Array.isArray(categoryQuestionNumbers)) {
+                // 创建题号集合以提高查找性能
+                const numberSet = new Set(categoryQuestionNumbers);
+                filtered = filtered.filter(q => numberSet.has(q.id));
+            }
+        }
+        
+        return filtered;
     }
     
     function applyFilter(filterValue) {
@@ -747,6 +931,26 @@ document.addEventListener('DOMContentLoaded', function() {
         
         renderAnswerSheet();
         renderQuestion(); // 更新显示的题目
+        updateStats(); // 更新统计信息（包括题型统计）
+        saveProgress();
+    }
+    
+    function applyCategoryFilter(categoryValue) {
+        state.categoryFilter = categoryValue;
+        state.currentPage = 1; // 回到第一页
+        
+        // 检查当前题目是否在筛选列表中
+        const filteredQuestions = getFilteredQuestions();
+        const currentQuestion = state.questions[state.currentIndex];
+        if (filteredQuestions.length > 0 && !filteredQuestions.includes(currentQuestion)) {
+            // 当前题目被筛选隐藏，跳转到筛选列表的第一题
+            const firstQuestion = filteredQuestions[0];
+            state.currentIndex = firstQuestion.id - 1;
+        }
+        
+        renderAnswerSheet();
+        renderQuestion(); // 更新显示的题目
+        updateStats(); // 更新统计信息（包括题型统计）
         saveProgress();
     }
 
@@ -944,6 +1148,52 @@ document.addEventListener('DOMContentLoaded', function() {
                 }
             });
         });
+        
+        // 知识点分类筛选
+        console.log('初始化知识点分类筛选器，dom.categorySelect:', dom.categorySelect);
+        if (dom.categorySelect) {
+            console.log('找到categorySelect元素，开始初始化选项');
+            // 清空现有选项
+            dom.categorySelect.innerHTML = '';
+            
+            // 添加"全部知识点"选项
+            const defaultOption = document.createElement('option');
+            defaultOption.value = 'all';
+            defaultOption.textContent = '全部知识点';
+            dom.categorySelect.appendChild(defaultOption);
+            
+            // 如果CATEGORY_LIST存在，添加分类选项
+            console.log('检查CATEGORY_LIST:', window.CATEGORY_LIST, 'CATEGORY_MAPPING:', window.CATEGORY_MAPPING);
+            if (window.CATEGORY_LIST && Array.isArray(window.CATEGORY_LIST)) {
+                // 跳过第一个"全部知识点"选项（因为我们已经添加了）
+                window.CATEGORY_LIST.slice(1).forEach(category => {
+                    const option = document.createElement('option');
+                    option.value = category.id;
+                    option.textContent = category.name;
+                    dom.categorySelect.appendChild(option);
+                });
+            } else if (window.CATEGORY_MAPPING) {
+                // 使用CATEGORY_MAPPING生成选项
+                Object.keys(window.CATEGORY_MAPPING).sort().forEach(key => {
+                    const [main, sub] = key.split('/', 2);
+                    const option = document.createElement('option');
+                    option.value = key;
+                    option.textContent = `${main} - ${sub}`;
+                    dom.categorySelect.appendChild(option);
+                });
+            }
+            
+            // 添加事件监听器
+            dom.categorySelect.addEventListener('change', (e) => {
+                applyCategoryFilter(e.target.value);
+            });
+            
+            // 设置初始值
+            dom.categorySelect.value = state.categoryFilter;
+            console.log('知识点分类筛选器初始化完成，选项数量:', dom.categorySelect.options.length);
+        } else {
+            console.error('未找到categorySelect元素！请检查HTML中是否有id="categorySelect"的元素');
+        }
         
         // 答题卡翻页
         dom.prevPage.addEventListener('click', () => changePage(-1));

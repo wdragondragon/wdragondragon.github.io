@@ -28,6 +28,40 @@
                         <span class="question-type" id="questionType">单选题</span>
                         <span class="question-number" id="questionNumber">第 1 题 / 共 1432 题</span>
                     </div>
+                    <div class="question-stats-summary" id="questionStatsSummary">
+                        <div class="stats-summary-row type-stats">
+                            <div class="stats-summary-item">
+                                <span class="stats-summary-label">单选题:</span>
+                                <span class="stats-summary-count" id="summarySingleCount">0/0/0</span>
+                            </div>
+                            <div class="stats-summary-item">
+                                <span class="stats-summary-label">多选题:</span>
+                                <span class="stats-summary-count" id="summaryMultipleCount">0/0/0</span>
+                            </div>
+                            <div class="stats-summary-item">
+                                <span class="stats-summary-label">判断题:</span>
+                                <span class="stats-summary-count" id="summaryJudgeCount">0/0/0</span>
+                            </div>
+                        </div>
+                        <div class="stats-summary-row status-stats">
+                            <div class="stats-summary-item">
+                                <span class="stats-summary-label">未作答:</span>
+                                <span class="stats-summary-count" id="summaryUnansweredCount">0</span>
+                            </div>
+                            <div class="stats-summary-item">
+                                <span class="stats-summary-label">正确:</span>
+                                <span class="stats-summary-count" id="summaryCorrectCount">0</span>
+                            </div>
+                            <div class="stats-summary-item">
+                                <span class="stats-summary-label">错误:</span>
+                                <span class="stats-summary-count" id="summaryIncorrectCount">0</span>
+                            </div>
+                            <div class="stats-summary-item">
+                                <span class="stats-summary-label">错题集:</span>
+                                <span class="stats-summary-count" id="summaryWrongBookCount">0</span>
+                            </div>
+                        </div>
+                    </div>
                     <div class="question-actions">
                         <button id="prevBtn" class="btn"><i class="fas fa-chevron-left"></i> 上一题</button>
                         <button id="nextBtn" class="btn">下一题 <i class="fas fa-chevron-right"></i></button>
@@ -139,6 +173,45 @@
                             <span class="filter-label">错题集</span>
                         </label>
                     </div>
+                    <div class="category-filter">
+                        <label for="categorySelect"><i class="fas fa-tags"></i> 知识点分类:</label>
+                        <select id="categorySelect" class="category-select">
+                            <option value="test">⚠️ 测试选项（如果看到这个，说明下拉框显示正常）</option>
+                            <!-- 选项将通过JavaScript动态生成 -->
+                        </select>
+                        <div class="question-type-stats" id="questionTypeStats">
+                            <div class="type-stat-item">
+                                <span class="type-stat-label">单选题:</span>
+                                <span class="type-stat-count" id="singleCount">0/0/0</span>
+                            </div>
+                            <div class="type-stat-item">
+                                <span class="type-stat-label">多选题:</span>
+                                <span class="type-stat-count" id="multipleCount">0/0/0</span>
+                            </div>
+                            <div class="type-stat-item">
+                                <span class="type-stat-label">判断题:</span>
+                                <span class="type-stat-count" id="judgeCount">0/0/0</span>
+                            </div>
+                        </div>
+                        <div class="category-stats" id="categoryStats">
+                            <div class="category-stat-item">
+                                <span class="category-stat-label">未作答:</span>
+                                <span class="category-stat-count" id="categoryUnansweredCount">0</span>
+                            </div>
+                            <div class="category-stat-item">
+                                <span class="category-stat-label">正确:</span>
+                                <span class="category-stat-count" id="categoryCorrectCount">0</span>
+                            </div>
+                            <div class="category-stat-item">
+                                <span class="category-stat-label">错误:</span>
+                                <span class="category-stat-count" id="categoryIncorrectCount">0</span>
+                            </div>
+                            <div class="category-stat-item">
+                                <span class="category-stat-label">错题集:</span>
+                                <span class="category-stat-count" id="categoryWrongBookCount">0</span>
+                            </div>
+                        </div>
+                    </div>
                 </div>
 
                 <div class="answer-sheet-card">
@@ -171,6 +244,7 @@
     </div>
 
     <script src="question-data.js"></script>
+    <script src="category-data.js"></script>
     <script src="script.js"></script>
 </body>
 </html>
