@@ -822,8 +822,47 @@ document.addEventListener('DOMContentLoaded', function() {
         if (state.mode === 'review' && !question.isWrongBook && state.reviewQuestions.length > 0) {
             state.reviewQuestions = state.reviewQuestions.filter(q => q.id !== question.id);
             state.currentQuestions = [...state.reviewQuestions];
+            
+            // 如果复习列表为空，切换到正常模式
+            if (state.reviewQuestions.length === 0) {
+                applyMode('normal');
+                return; // applyMode 会重新渲染UI
+            }
+            
+            // 寻找下一个有效的题目
+            let targetQuestion = null;
+            // 查找复习列表中第一个ID大于当前题目ID的题目（下一题）
+            const nextQuestion = state.reviewQuestions.find(q => q.id > question.id);
+            if (nextQuestion) {
+                targetQuestion = nextQuestion;
+            } else {
+                // 如果没有更大的ID，则查找最后一个ID小于当前题目ID的题目（上一题）
+                // 因为列表不为空，至少有一个题目
+                const prevQuestion = state.reviewQuestions.filter(q => q.id < question.id).pop();
+                if (prevQuestion) {
+                    targetQuestion = prevQuestion;
+                } else {
+                    // 理论上不会发生，但以防万一：选择第一题
+                    targetQuestion = state.reviewQuestions[0];
+                }
+            }
+            
+            // 导航到目标题目
+            if (targetQuestion) {
+                navigateToQuestion(targetQuestion.id - 1);
+            }
+            
+            // 更新答题卡、统计和保存进度
+            renderAnswerSheet();
+            updateStats();
+            saveProgress();
+            
+            // 显示提示
+            showToast('已移出错题集');
+            return; // 跳过后续的通用更新，因为 navigateToQuestion 已经更新了UI
         }
         
+        // 非复习模式，或加入错题集的情况
         updateWrongBookButtons(question);
         updateStats();
         renderAnswerSheet();
