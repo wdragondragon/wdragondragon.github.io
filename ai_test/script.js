@@ -6,6 +6,7 @@ document.addEventListener('DOMContentLoaded', function() {
         currentIndex: 0,         // 当前题目索引（0-based）
         filter: 'all',           // 当前筛选条件（答题状态）
         categoryFilter: 'all',   // 当前知识点分类筛选
+        typeFilter: 'all',       // 当前题型筛选
         currentPage: 1,          // 答题卡当前页码
         pageSize: 100,           // 每页显示题数（10x10网格）
         isLoading: false,        // 加载状态
@@ -69,6 +70,7 @@ document.addEventListener('DOMContentLoaded', function() {
         
         // 筛选
         filterRadios: document.querySelectorAll('input[name="filter"]'),
+        typeFilterRadios: document.querySelectorAll('input[name="typeFilter"]'),
         categorySelect: document.getElementById('categorySelect'),
         modeSelect: document.getElementById('modeSelect'),
         examControls: document.getElementById('examControls'),
@@ -290,6 +292,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 currentIndex: state.currentIndex,
                 filter: state.filter,
                 categoryFilter: state.categoryFilter,
+                typeFilter: state.typeFilter,
                 currentPage: state.currentPage,
                 mode: state.mode,
                 // 保存考试模式题目ID，以便恢复相同的题目集合
@@ -337,12 +340,20 @@ document.addEventListener('DOMContentLoaded', function() {
             state.currentIndex = progress.currentIndex || 0;
             state.filter = progress.filter || 'all';
             state.categoryFilter = progress.categoryFilter || 'all';
+            state.typeFilter = progress.typeFilter || 'all';
             state.currentPage = progress.currentPage || 1;
             state.mode = progress.mode || 'normal';
             
             // 更新分类选择框的值
             if (dom.categorySelect) {
                 dom.categorySelect.value = state.categoryFilter;
+            }
+            
+            // 更新题型筛选单选按钮的值
+            if (dom.typeFilterRadios && dom.typeFilterRadios.length > 0) {
+                dom.typeFilterRadios.forEach(radio => {
+                    radio.checked = (radio.value === state.typeFilter);
+                });
             }
             
             // 更新模式选择框的值
@@ -451,6 +462,7 @@ document.addEventListener('DOMContentLoaded', function() {
             state.currentIndex = 0;
             state.filter = 'all';
             state.categoryFilter = 'all';
+            state.typeFilter = 'all';
             state.currentPage = 1;
             state.mode = 'normal';
             state.examQuestions = [];
@@ -460,6 +472,13 @@ document.addEventListener('DOMContentLoaded', function() {
             // 更新模式选择框
             if (dom.modeSelect) {
                 dom.modeSelect.value = 'normal';
+            }
+            
+            // 更新题型筛选单选按钮
+            if (dom.typeFilterRadios && dom.typeFilterRadios.length > 0) {
+                dom.typeFilterRadios.forEach(radio => {
+                    radio.checked = (radio.value === 'all');
+                });
             }
             
             // 更新考试控制按钮的显示状态
@@ -822,8 +841,47 @@ document.addEventListener('DOMContentLoaded', function() {
         if (state.mode === 'review' && !question.isWrongBook && state.reviewQuestions.length > 0) {
             state.reviewQuestions = state.reviewQuestions.filter(q => q.id !== question.id);
             state.currentQuestions = [...state.reviewQuestions];
+            
+            // 如果复习列表为空，切换到正常模式
+            if (state.reviewQuestions.length === 0) {
+                applyMode('normal');
+                return; // applyMode 会重新渲染UI
+            }
+            
+            // 寻找下一个有效的题目
+            let targetQuestion = null;
+            // 查找复习列表中第一个ID大于当前题目ID的题目（下一题）
+            const nextQuestion = state.reviewQuestions.find(q => q.id > question.id);
+            if (nextQuestion) {
+                targetQuestion = nextQuestion;
+            } else {
+                // 如果没有更大的ID，则查找最后一个ID小于当前题目ID的题目（上一题）
+                // 因为列表不为空，至少有一个题目
+                const prevQuestion = state.reviewQuestions.filter(q => q.id < question.id).pop();
+                if (prevQuestion) {
+                    targetQuestion = prevQuestion;
+                } else {
+                    // 理论上不会发生，但以防万一：选择第一题
+                    targetQuestion = state.reviewQuestions[0];
+                }
+            }
+            
+            // 导航到目标题目
+            if (targetQuestion) {
+                navigateToQuestion(targetQuestion.id - 1);
+            }
+            
+            // 更新答题卡、统计和保存进度
+            renderAnswerSheet();
+            updateStats();
+            saveProgress();
+            
+            // 显示提示
+            showToast('已移出错题集');
+            return; // 跳过后续的通用更新，因为 navigateToQuestion 已经更新了UI
         }
         
+        // 非复习模式，或加入错题集的情况
         updateWrongBookButtons(question);
         updateStats();
         renderAnswerSheet();
@@ -1166,6 +1224,11 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         }
         
+        // 3. 应用题型筛选
+        if (state.typeFilter !== 'all') {
+            filtered = filtered.filter(q => q.type === state.typeFilter);
+        }
+        
         return filtered;
     }
     
@@ -1190,6 +1253,25 @@ document.addEventListener('DOMContentLoaded', function() {
     
     function applyCategoryFilter(categoryValue) {
         state.categoryFilter = categoryValue;
+        state.currentPage = 1; // 回到第一页
+        
+        // 检查当前题目是否在筛选列表中
+        const filteredQuestions = getFilteredQuestions();
+        const currentQuestion = state.questions[state.currentIndex];
+        if (filteredQuestions.length > 0 && !filteredQuestions.find(q => q.id === currentQuestion.id)) {
+            // 当前题目被筛选隐藏，跳转到筛选列表的第一题
+            const firstQuestion = filteredQuestions[0];
+            state.currentIndex = firstQuestion.id - 1;
+        }
+        
+        renderAnswerSheet();
+        renderQuestion(); // 更新显示的题目
+        updateStats(); // 更新统计信息（包括题型统计）
+        saveProgress();
+    }
+    
+    function applyTypeFilter(typeValue) {
+        state.typeFilter = typeValue;
         state.currentPage = 1; // 回到第一页
         
         // 检查当前题目是否在筛选列表中
@@ -1247,11 +1329,17 @@ document.addEventListener('DOMContentLoaded', function() {
         // 重置筛选条件（模式切换时清除筛选）
         state.filter = 'all';
         state.categoryFilter = 'all';
+        state.typeFilter = 'all';
         
         // 更新筛选UI
         dom.filterRadios.forEach(radio => {
             if (radio.value === 'all') radio.checked = true;
         });
+        if (dom.typeFilterRadios && dom.typeFilterRadios.length > 0) {
+            dom.typeFilterRadios.forEach(radio => {
+                if (radio.value === 'all') radio.checked = true;
+            });
+        }
         if (dom.categorySelect) {
             dom.categorySelect.value = 'all';
         }
@@ -1548,6 +1636,15 @@ document.addEventListener('DOMContentLoaded', function() {
             radio.addEventListener('change', (e) => {
                 if (e.target.checked) {
                     applyFilter(e.target.value);
+                }
+            });
+        });
+        
+        // 题型筛选
+        dom.typeFilterRadios.forEach(radio => {
+            radio.addEventListener('change', (e) => {
+                if (e.target.checked) {
+                    applyTypeFilter(e.target.value);
                 }
             });
         });

@@ -4,6 +4,15 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>题库训练系统</title>
+    <script>
+        var _hmt = _hmt || [];
+        (function() {
+            var hm = document.createElement("script");
+            hm.src = "https://hm.baidu.com/hm.js?c0eb50d5dace8f4c7319fd2c48cfebbc";
+            var s = document.getElementsByTagName("script")[0];
+            s.parentNode.insertBefore(hm, s);
+        })();
+    </script>
     <link rel="stylesheet" href="style.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 </head>
@@ -184,6 +193,27 @@
                             <input type="radio" name="filter" value="wrongbook">
                             <span class="filter-label">错题集</span>
                         </label>
+                    </div>
+                    <div class="type-filter">
+                        <div class="type-filter-label"><i class="fas fa-question-circle"></i> 题型筛选:</div>
+                        <div class="filter-options type-filter-options">
+                            <label class="filter-option">
+                                <input type="radio" name="typeFilter" value="all" checked>
+                                <span class="filter-label">全部题型</span>
+                            </label>
+                            <label class="filter-option">
+                                <input type="radio" name="typeFilter" value="single">
+                                <span class="filter-label">单选题</span>
+                            </label>
+                            <label class="filter-option">
+                                <input type="radio" name="typeFilter" value="multiple">
+                                <span class="filter-label">多选题</span>
+                            </label>
+                            <label class="filter-option">
+                                <input type="radio" name="typeFilter" value="judge">
+                                <span class="filter-label">判断题</span>
+                            </label>
+                        </div>
                     </div>
                     <div class="category-filter">
                         <label for="categorySelect"><i class="fas fa-tags"></i> 知识点分类:</label>
