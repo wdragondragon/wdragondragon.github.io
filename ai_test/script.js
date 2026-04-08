@@ -32,6 +32,28 @@ document.addEventListener('DOMContentLoaded', function() {
 
     const STORAGE_KEY = 'question_bank_progress';
 
+    const WRONG_BOOK_IMPORT_MODES = {
+        IDS: 'ids',
+        ERROR_HTML: 'errorHtml'
+    };
+
+    const WRONG_BOOK_IMPORT_MODE_CONFIG = {
+        [WRONG_BOOK_IMPORT_MODES.ERROR_HTML]: {
+            subtitle: '支持直接粘贴 error.html 全文，系统会自动抓取错题并转换成 1432 主库题号。',
+            label: '粘贴 error.html 全文',
+            placeholder: '把 error.html 的完整源码粘贴到这里，系统会自动提取“你答错了 / 回答部分正确”的题目。',
+            summary: '支持直接粘贴 error.html 全文，系统会自动抓取错题并转换成 1432 主库题号。'
+        },
+        [WRONG_BOOK_IMPORT_MODES.IDS]: {
+            subtitle: '支持直接粘贴 1432 主库题号，导入时会自动去重，并与现有错题集合并。',
+            label: '粘贴 1432 主库题号',
+            placeholder: '支持空格、换行、逗号、顿号分隔，例如：\n12 35 108\n256, 300, 401',
+            summary: '仅支持 1432 主库题号；导入时会自动去重，并与现有错题集合并。'
+        }
+    };
+
+    let wrongBookImportMode = WRONG_BOOK_IMPORT_MODES.ERROR_HTML;
+
     // ==================== DOM 元素 ====================
     const dom = {
         // 题目显示
@@ -58,6 +80,10 @@ document.addEventListener('DOMContentLoaded', function() {
         confirmWrongBookImport: document.getElementById('confirmWrongBookImport'),
         cancelWrongBookImport: document.getElementById('cancelWrongBookImport'),
         closeWrongBookImport: document.getElementById('closeWrongBookImport'),
+        wrongBookImportModeIds: document.getElementById('wrongBookImportModeIds'),
+        wrongBookImportModeErrorHtml: document.getElementById('wrongBookImportModeErrorHtml'),
+        wrongBookImportSubtitle: document.getElementById('wrongBookImportSubtitle'),
+        wrongBookImportLabel: document.getElementById('wrongBookImportLabel'),
         wrongBookImportSummary: document.getElementById('wrongBookImportSummary'),
         wrongBookHint: document.getElementById('wrongBookHint'),
         
@@ -569,6 +595,10 @@ document.addEventListener('DOMContentLoaded', function() {
         reader.readAsText(file);
     }
 
+    function getWrongBookImportModeConfig(mode = wrongBookImportMode) {
+        return WRONG_BOOK_IMPORT_MODE_CONFIG[mode] || WRONG_BOOK_IMPORT_MODE_CONFIG[WRONG_BOOK_IMPORT_MODES.ERROR_HTML];
+    }
+
     function setWrongBookImportSummary(message, type = 'info') {
         if (!dom.wrongBookImportSummary) return;
 
@@ -578,6 +608,33 @@ document.addEventListener('DOMContentLoaded', function() {
         if (type !== 'info') {
             dom.wrongBookImportSummary.classList.add(`is-${type}`);
         }
+    }
+
+    function applyWrongBookImportMode(mode) {
+        if (!Object.values(WRONG_BOOK_IMPORT_MODES).includes(mode)) {
+            return;
+        }
+
+        wrongBookImportMode = mode;
+        const config = getWrongBookImportModeConfig(mode);
+
+        if (dom.wrongBookImportModeErrorHtml) {
+            dom.wrongBookImportModeErrorHtml.classList.toggle('active', mode === WRONG_BOOK_IMPORT_MODES.ERROR_HTML);
+        }
+        if (dom.wrongBookImportModeIds) {
+            dom.wrongBookImportModeIds.classList.toggle('active', mode === WRONG_BOOK_IMPORT_MODES.IDS);
+        }
+        if (dom.wrongBookImportSubtitle) {
+            dom.wrongBookImportSubtitle.textContent = config.subtitle;
+        }
+        if (dom.wrongBookImportLabel) {
+            dom.wrongBookImportLabel.textContent = config.label;
+        }
+        if (dom.wrongBookImportInput) {
+            dom.wrongBookImportInput.placeholder = config.placeholder;
+        }
+
+        setWrongBookImportSummary(config.summary);
     }
 
     function toggleWrongBookImportPanel(forceOpen) {
@@ -590,7 +647,7 @@ document.addEventListener('DOMContentLoaded', function() {
         if (shouldOpen) {
             dom.wrongBookImportPanel.removeAttribute('hidden');
             document.body.style.overflow = 'hidden';
-            setWrongBookImportSummary('仅支持 1432 主库题号；导入时会自动去重，并与现有错题集合并。');
+            applyWrongBookImportMode(wrongBookImportMode);
 
             if (dom.wrongBookImportInput) {
                 dom.wrongBookImportInput.focus();
@@ -603,10 +660,220 @@ document.addEventListener('DOMContentLoaded', function() {
         if (dom.wrongBookImportInput) {
             dom.wrongBookImportInput.value = '';
         }
-        setWrongBookImportSummary('仅支持 1432 主库题号；导入时会自动去重，并与现有错题集合并。');
+        applyWrongBookImportMode(wrongBookImportMode);
         if (dom.toggleWrongBookImport) {
             dom.toggleWrongBookImport.focus();
         }
+    }
+
+    function normalizeWrongBookImportText(text) {
+        let normalized = String(text || '');
+        normalized = normalized.replace(/\u00A0/g, ' ');
+        normalized = normalized.replace(/<br\s*\/?>/gi, ' ');
+        normalized = normalized.replace(/\s+/g, '');
+
+        const replacements = {
+            '（': '(',
+            '）': ')',
+            '“': '"',
+            '”': '"',
+            '‘': '\'',
+            '’': '\''
+        };
+
+        Object.keys(replacements).forEach(key => {
+            normalized = normalized.split(key).join(replacements[key]);
+        });
+
+        return normalized.trim();
+    }
+
+    function applyImportedWrongBookIds(questionIds) {
+        const validIds = [...new Set(questionIds.filter(id => Number.isInteger(id)))];
+        const existingWrongIds = new Set(
+            state.questions.filter(q => q.isWrongBook).map(q => q.id)
+        );
+        const newlyAddedIds = validIds.filter(id => !existingWrongIds.has(id));
+        const alreadyExistingCount = validIds.length - newlyAddedIds.length;
+        const importedIdSet = new Set(newlyAddedIds);
+
+        if (importedIdSet.size > 0) {
+            state.questions.forEach(question => {
+                if (importedIdSet.has(question.id)) {
+                    question.isWrongBook = true;
+                }
+            });
+
+            state.examQuestions.forEach(question => {
+                if (importedIdSet.has(question.id)) {
+                    question.isWrongBook = true;
+                }
+            });
+
+            state.reviewQuestions.forEach(question => {
+                if (importedIdSet.has(question.id)) {
+                    question.isWrongBook = true;
+                }
+            });
+
+            if (state.mode === 'review') {
+                const existingReviewIds = new Set(state.reviewQuestions.map(q => q.id));
+                const appendedReviewQuestions = state.questions
+                    .filter(q => importedIdSet.has(q.id) && !existingReviewIds.has(q.id))
+                    .sort((a, b) => a.id - b.id)
+                    .map(q => cloneQuestion(q));
+
+                if (appendedReviewQuestions.length > 0) {
+                    state.reviewQuestions = [...state.reviewQuestions, ...appendedReviewQuestions]
+                        .sort((a, b) => a.id - b.id);
+                    state.currentQuestions = [...state.reviewQuestions];
+                }
+            }
+        }
+
+        const currentQuestion = getCurrentQuestion();
+        if (currentQuestion) {
+            updateWrongBookButtons(currentQuestion);
+        }
+
+        renderQuestion();
+        updateStats();
+        renderAnswerSheet();
+        saveProgress();
+
+        return {
+            validIds,
+            newlyAddedIds,
+            alreadyExistingCount
+        };
+    }
+
+    function buildWrongBookStemIndexes() {
+        const allIndex = new Map();
+        const examSubsetIndex = new Map();
+        const examSourceIdSet = Array.isArray(window.EXAM_SOURCE_IDS)
+            ? new Set(window.EXAM_SOURCE_IDS.map(id => Number(id)))
+            : new Set();
+
+        state.questions.forEach(question => {
+            const key = normalizeWrongBookImportText(question.question);
+            if (!allIndex.has(key)) {
+                allIndex.set(key, []);
+            }
+            allIndex.get(key).push(question);
+
+            if (examSourceIdSet.has(question.id)) {
+                if (!examSubsetIndex.has(key)) {
+                    examSubsetIndex.set(key, []);
+                }
+                examSubsetIndex.get(key).push(question);
+            }
+        });
+
+        return { allIndex, examSubsetIndex };
+    }
+
+    function extractWrongItemsFromErrorHtml(htmlText) {
+        const parser = new DOMParser();
+        const doc = parser.parseFromString(String(htmlText || ''), 'text/html');
+        const wrongPatterns = [/你\s*答\s*错\s*了/, /你\s*答错\s*了/];
+        const partialPatterns = [/回\s*答\s*部\s*分\s*正\s*确/];
+        const wrongItems = [];
+
+        doc.querySelectorAll('.js-testpaper-question-block .js-testpaper-question').forEach(block => {
+            const resultNode = block.querySelector('.testpaper-question-result');
+            if (!resultNode) {
+                return;
+            }
+
+            const resultText = resultNode.textContent.replace(/\s+/g, ' ').trim();
+            const isWrong = wrongPatterns.some(pattern => pattern.test(resultText));
+            const isPartial = partialPatterns.some(pattern => pattern.test(resultText));
+
+            if (!isWrong && !isPartial) {
+                return;
+            }
+
+            const seqNode = block.querySelector('.testpaper-question-seq');
+            const stemNode = block.querySelector('.testpaper-question-stem');
+            if (!seqNode || !stemNode) {
+                return;
+            }
+
+            wrongItems.push({
+                seq: Number(seqNode.textContent.replace(/\s+/g, ' ').trim()),
+                stem: stemNode.textContent.replace(/\s+/g, ' ').trim(),
+                status: isPartial ? 'partial' : 'wrong'
+            });
+        });
+
+        return wrongItems;
+    }
+
+    function mapErrorHtmlWrongItemsToQuestionIds(wrongItems) {
+        const { allIndex, examSubsetIndex } = buildWrongBookStemIndexes();
+        const questionById = new Map(state.questions.map(question => [question.id, question]));
+        const matchedIds = [];
+        const unmatchedItems = [];
+        const ambiguousItems = [];
+        let sequenceMatchCount = 0;
+        let stemFallbackCount = 0;
+
+        wrongItems.forEach(item => {
+            const normalizedStem = normalizeWrongBookImportText(item.stem);
+            const seqMappedId = window.EXAM_QUESTION_ID_MAP
+                ? Number(window.EXAM_QUESTION_ID_MAP[item.seq])
+                : null;
+
+            if (seqMappedId) {
+                const mappedQuestion = questionById.get(seqMappedId);
+                if (mappedQuestion && normalizeWrongBookImportText(mappedQuestion.question) === normalizedStem) {
+                    matchedIds.push(seqMappedId);
+                    sequenceMatchCount += 1;
+                    return;
+                }
+            }
+
+            const examSubsetCandidates = (examSubsetIndex.get(normalizedStem) || []).map(question => question.id);
+            if (examSubsetCandidates.length === 1) {
+                matchedIds.push(examSubsetCandidates[0]);
+                stemFallbackCount += 1;
+                return;
+            }
+            if (examSubsetCandidates.length > 1) {
+                ambiguousItems.push({
+                    seq: item.seq,
+                    stem: item.stem,
+                    ids: examSubsetCandidates
+                });
+                return;
+            }
+
+            const allCandidates = (allIndex.get(normalizedStem) || []).map(question => question.id);
+            if (allCandidates.length === 1) {
+                matchedIds.push(allCandidates[0]);
+                stemFallbackCount += 1;
+                return;
+            }
+            if (allCandidates.length > 1) {
+                ambiguousItems.push({
+                    seq: item.seq,
+                    stem: item.stem,
+                    ids: allCandidates
+                });
+                return;
+            }
+
+            unmatchedItems.push(item);
+        });
+
+        return {
+            matchedIds: [...new Set(matchedIds)],
+            unmatchedItems,
+            ambiguousItems,
+            sequenceMatchCount,
+            stemFallbackCount
+        };
     }
 
     function importWrongBookByIds() {
@@ -671,66 +938,16 @@ document.addEventListener('DOMContentLoaded', function() {
             return;
         }
 
-        const existingWrongIds = new Set(
-            state.questions.filter(q => q.isWrongBook).map(q => q.id)
-        );
-        const newlyAddedIds = uniqueValidIds.filter(id => !existingWrongIds.has(id));
-        const alreadyExistingCount = uniqueValidIds.length - newlyAddedIds.length;
-        const importedIdSet = new Set(newlyAddedIds);
-
-        if (importedIdSet.size > 0) {
-            state.questions.forEach(question => {
-                if (importedIdSet.has(question.id)) {
-                    question.isWrongBook = true;
-                }
-            });
-
-            state.examQuestions.forEach(question => {
-                if (importedIdSet.has(question.id)) {
-                    question.isWrongBook = true;
-                }
-            });
-
-            state.reviewQuestions.forEach(question => {
-                if (importedIdSet.has(question.id)) {
-                    question.isWrongBook = true;
-                }
-            });
-
-            if (state.mode === 'review') {
-                const existingReviewIds = new Set(state.reviewQuestions.map(q => q.id));
-                const appendedReviewQuestions = state.questions
-                    .filter(q => importedIdSet.has(q.id) && !existingReviewIds.has(q.id))
-                    .sort((a, b) => a.id - b.id)
-                    .map(q => cloneQuestion(q));
-
-                if (appendedReviewQuestions.length > 0) {
-                    state.reviewQuestions = [...state.reviewQuestions, ...appendedReviewQuestions]
-                        .sort((a, b) => a.id - b.id);
-                    state.currentQuestions = [...state.reviewQuestions];
-                }
-            }
-        }
-
-        const currentQuestion = getCurrentQuestion();
-        if (currentQuestion) {
-            updateWrongBookButtons(currentQuestion);
-        }
-
-        renderQuestion();
-        updateStats();
-        renderAnswerSheet();
-        saveProgress();
-
+        const importResult = applyImportedWrongBookIds(uniqueValidIds);
         const invalidPreview = invalidTokens.slice(0, 5).join('、');
         const invalidSuffix = invalidTokens.length > 5 ? ` 等 ${invalidTokens.length} 个` : '';
         const summaryParts = [];
 
-        if (newlyAddedIds.length > 0) {
-            summaryParts.push(`新增 ${newlyAddedIds.length} 道`);
+        if (importResult.newlyAddedIds.length > 0) {
+            summaryParts.push(`新增 ${importResult.newlyAddedIds.length} 道`);
         }
-        if (alreadyExistingCount > 0) {
-            summaryParts.push(`已存在 ${alreadyExistingCount} 道`);
+        if (importResult.alreadyExistingCount > 0) {
+            summaryParts.push(`已存在 ${importResult.alreadyExistingCount} 道`);
         }
         if (duplicateCount > 0) {
             summaryParts.push(`重复输入 ${duplicateCount} 个`);
@@ -745,11 +962,11 @@ document.addEventListener('DOMContentLoaded', function() {
 
         setWrongBookImportSummary(
             summaryText,
-            newlyAddedIds.length > 0 ? (invalidTokens.length > 0 ? 'warning' : 'success') : 'warning'
+            importResult.newlyAddedIds.length > 0 ? (invalidTokens.length > 0 ? 'warning' : 'success') : 'warning'
         );
 
-        if (newlyAddedIds.length > 0) {
-            showToast(`已导入 ${newlyAddedIds.length} 道错题`, 'success');
+        if (importResult.newlyAddedIds.length > 0) {
+            showToast(`已导入 ${importResult.newlyAddedIds.length} 道错题`, 'success');
             if (invalidTokens.length === 0) {
                 toggleWrongBookImportPanel(false);
             } else {
@@ -758,6 +975,110 @@ document.addEventListener('DOMContentLoaded', function() {
         } else {
             showToast('输入的题号都已在错题集中', 'info');
         }
+    }
+
+    function importWrongBookByErrorHtml() {
+        if (!dom.wrongBookImportInput) return;
+
+        const rawInput = dom.wrongBookImportInput.value.trim();
+        if (!rawInput) {
+            setWrongBookImportSummary('请先粘贴 error.html 的完整内容。', 'warning');
+            showToast('请先粘贴 error.html 内容', 'warning');
+            dom.wrongBookImportInput.focus();
+            return;
+        }
+
+        const wrongItems = extractWrongItemsFromErrorHtml(rawInput);
+        if (wrongItems.length === 0) {
+            setWrongBookImportSummary('没有识别到错题块，请确认粘贴的是 error.html 的完整源码，而不是页面截图或纯文本。', 'error');
+            showToast('没有识别到可导入的错题', 'error');
+            return;
+        }
+
+        const partialCount = wrongItems.filter(item => item.status === 'partial').length;
+        const matchedResult = mapErrorHtmlWrongItemsToQuestionIds(wrongItems);
+
+        if (matchedResult.matchedIds.length === 0) {
+            const unmatchedPreview = matchedResult.unmatchedItems.slice(0, 5).map(item => `第${item.seq}题`).join('、');
+            const ambiguousPreview = matchedResult.ambiguousItems.slice(0, 5).map(item => `第${item.seq}题`).join('、');
+            const summaryParts = [
+                `识别到错题 ${wrongItems.length} 道`
+            ];
+
+            if (partialCount > 0) {
+                summaryParts.push(`其中部分正确 ${partialCount} 道`);
+            }
+            if (matchedResult.unmatchedItems.length > 0) {
+                summaryParts.push(`未匹配 ${matchedResult.unmatchedItems.length} 道${unmatchedPreview ? `（${unmatchedPreview}）` : ''}`);
+            }
+            if (matchedResult.ambiguousItems.length > 0) {
+                summaryParts.push(`歧义 ${matchedResult.ambiguousItems.length} 道${ambiguousPreview ? `（${ambiguousPreview}）` : ''}`);
+            }
+
+            setWrongBookImportSummary(`${summaryParts.join('，')}。`, 'error');
+            showToast('未能匹配到 1432 题号', 'error');
+            return;
+        }
+
+        const importResult = applyImportedWrongBookIds(matchedResult.matchedIds);
+        const unmatchedPreview = matchedResult.unmatchedItems.slice(0, 5).map(item => `第${item.seq}题`).join('、');
+        const ambiguousPreview = matchedResult.ambiguousItems.slice(0, 5).map(item => `第${item.seq}题`).join('、');
+        const summaryParts = [
+            `识别到错题 ${wrongItems.length} 道`
+        ];
+
+        if (partialCount > 0) {
+            summaryParts.push(`其中部分正确 ${partialCount} 道`);
+        }
+        summaryParts.push(`匹配到 1432 题号 ${importResult.validIds.length} 道`);
+
+        if (importResult.newlyAddedIds.length > 0) {
+            summaryParts.push(`新增 ${importResult.newlyAddedIds.length} 道`);
+        }
+        if (importResult.alreadyExistingCount > 0) {
+            summaryParts.push(`已存在 ${importResult.alreadyExistingCount} 道`);
+        }
+        if (matchedResult.sequenceMatchCount > 0) {
+            summaryParts.push(`序号直连命中 ${matchedResult.sequenceMatchCount} 道`);
+        }
+        if (matchedResult.stemFallbackCount > 0) {
+            summaryParts.push(`题干补全 ${matchedResult.stemFallbackCount} 道`);
+        }
+        if (matchedResult.unmatchedItems.length > 0) {
+            summaryParts.push(`未匹配 ${matchedResult.unmatchedItems.length} 道${unmatchedPreview ? `（${unmatchedPreview}）` : ''}`);
+        }
+        if (matchedResult.ambiguousItems.length > 0) {
+            summaryParts.push(`歧义 ${matchedResult.ambiguousItems.length} 道${ambiguousPreview ? `（${ambiguousPreview}）` : ''}`);
+        }
+
+        const hasWarnings = matchedResult.unmatchedItems.length > 0 || matchedResult.ambiguousItems.length > 0;
+        setWrongBookImportSummary(`导入结果：${summaryParts.join('，')}。`, hasWarnings ? 'warning' : 'success');
+
+        if (importResult.newlyAddedIds.length > 0) {
+            showToast(`已导入 ${importResult.newlyAddedIds.length} 道错题`, 'success');
+        } else {
+            showToast('识别出的错题都已在错题集中', 'info');
+        }
+
+        if (!hasWarnings) {
+            toggleWrongBookImportPanel(false);
+            return;
+        }
+    }
+
+    function submitWrongBookImport() {
+        if (state.questions.length === 0) {
+            setWrongBookImportSummary('题库尚未加载完成，请稍后再试。', 'warning');
+            showToast('题库尚未加载完成', 'warning');
+            return;
+        }
+
+        if (wrongBookImportMode === WRONG_BOOK_IMPORT_MODES.IDS) {
+            importWrongBookByIds();
+            return;
+        }
+
+        importWrongBookByErrorHtml();
     }
 
     // ==================== 题目渲染 ====================
@@ -1883,8 +2204,24 @@ document.addEventListener('DOMContentLoaded', function() {
                 toggleWrongBookImportPanel();
             });
         }
+        if (dom.wrongBookImportModeErrorHtml) {
+            dom.wrongBookImportModeErrorHtml.addEventListener('click', () => {
+                applyWrongBookImportMode(WRONG_BOOK_IMPORT_MODES.ERROR_HTML);
+                if (dom.wrongBookImportInput) {
+                    dom.wrongBookImportInput.focus();
+                }
+            });
+        }
+        if (dom.wrongBookImportModeIds) {
+            dom.wrongBookImportModeIds.addEventListener('click', () => {
+                applyWrongBookImportMode(WRONG_BOOK_IMPORT_MODES.IDS);
+                if (dom.wrongBookImportInput) {
+                    dom.wrongBookImportInput.focus();
+                }
+            });
+        }
         if (dom.confirmWrongBookImport) {
-            dom.confirmWrongBookImport.addEventListener('click', importWrongBookByIds);
+            dom.confirmWrongBookImport.addEventListener('click', submitWrongBookImport);
         }
         if (dom.cancelWrongBookImport) {
             dom.cancelWrongBookImport.addEventListener('click', () => {
@@ -1907,7 +2244,7 @@ document.addEventListener('DOMContentLoaded', function() {
             dom.wrongBookImportInput.addEventListener('keydown', (e) => {
                 if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
                     e.preventDefault();
-                    importWrongBookByIds();
+                    submitWrongBookImport();
                     return;
                 }
 

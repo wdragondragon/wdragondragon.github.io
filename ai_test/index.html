@@ -122,7 +122,7 @@
                         <i class="fas fa-trash-alt"></i> 移除错题集
                     </button>
                     <button id="toggleWrongBookImport" class="btn btn-import-wrongbook">
-                        <i class="fas fa-paste"></i> 粘贴题号导入
+                        <i class="fas fa-file-import"></i> 导入错题
                     </button>
                     <button id="clearWrongBook" class="btn btn-wrongbook-remove">
                         <i class="fas fa-broom"></i> 清空错题集
@@ -298,21 +298,30 @@
         <div class="wrong-book-import-dialog" role="dialog" aria-modal="true" aria-labelledby="wrongBookImportTitle">
             <div class="wrong-book-import-header">
                 <div>
-                    <h3 id="wrongBookImportTitle">导入错题题号</h3>
-                    <p class="wrong-book-import-subtitle">仅支持 1432 主库题号；导入时会自动去重，并与现有错题集合并。</p>
+                    <h3 id="wrongBookImportTitle">导入错题</h3>
+                    <p id="wrongBookImportSubtitle" class="wrong-book-import-subtitle">支持直接粘贴 error.html 全文，系统会自动抓取错题并转换成 1432 主库题号。</p>
                 </div>
                 <button id="closeWrongBookImport" class="wrong-book-import-close" type="button" aria-label="关闭导入弹窗">
                     <i class="fas fa-times"></i>
                 </button>
             </div>
 
-            <label class="wrong-book-import-label" for="wrongBookImportInput">
-                粘贴 1432 主库题号
+            <div class="wrong-book-import-mode-switch" role="tablist" aria-label="错题导入方式">
+                <button id="wrongBookImportModeErrorHtml" class="wrong-book-import-mode-btn active" type="button" data-mode="errorHtml">
+                    <i class="fas fa-code"></i> error.html 导入
+                </button>
+                <button id="wrongBookImportModeIds" class="wrong-book-import-mode-btn" type="button" data-mode="ids">
+                    <i class="fas fa-list-ol"></i> 1432 题号导入
+                </button>
+            </div>
+
+            <label id="wrongBookImportLabel" class="wrong-book-import-label" for="wrongBookImportInput">
+                粘贴 error.html 全文
             </label>
             <textarea
                 id="wrongBookImportInput"
                 class="wrong-book-import-input"
-                placeholder="支持空格、换行、逗号、顿号分隔，例如：&#10;12 35 108&#10;256, 300, 401"
+                placeholder="把 error.html 的完整源码粘贴到这里，系统会自动提取“你答错了 / 回答部分正确”的题目。"
             ></textarea>
 
             <div class="wrong-book-import-actions">
@@ -325,13 +334,14 @@
             </div>
 
             <p id="wrongBookImportSummary" class="wrong-book-import-summary">
-                仅支持 1432 主库题号；导入时会自动去重，并与现有错题集合并。
+                支持直接粘贴 error.html 全文，系统会自动抓取错题并转换成 1432 主库题号。
             </p>
         </div>
     </div>
 
     <script src="question-data.js"></script>
     <script src="category-data.js"></script>
+    <script src="exam-question-map.js"></script>
     <script src="script.js"></script>
 </body>
 </html>
