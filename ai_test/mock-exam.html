@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>模拟考试模式</title>
+    <link rel="stylesheet" href="mock-exam.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body>
+    <div class="page-shell">
+        <div class="container">
+            <header class="page-header">
+                <div class="header-copy">
+                    <p class="eyebrow">1432题主库映射考试</p>
+                    <h1><i class="fas fa-file-signature"></i> 模拟考试模式</h1>
+                    <p class="header-description">
+                        模拟考试题目来自考试 400 题与原 1432 题库的映射结果，页面展示与判题统一以 1432 题号为主，错题会同步到原练习页错题集。
+                    </p>
+                </div>
+                <div class="header-actions">
+                    <button id="backToPracticeBtn" class="btn btn-ghost">
+                        <i class="fas fa-arrow-left"></i> 返回题库练习
+                    </button>
+                    <button id="restartExamBtn" class="btn btn-warning">
+                        <i class="fas fa-rotate-right"></i> 重新抽卷
+                    </button>
+                </div>
+            </header>
+
+            <main class="layout">
+                <section class="question-panel">
+                    <div class="question-shell">
+                        <div class="question-meta">
+                            <div class="question-meta-left">
+                                <span id="questionType" class="question-pill">单选题</span>
+                                <span id="questionNumber" class="question-number">题号 1 · 模拟卷第 1 题 / 共 100 题</span>
+                            </div>
+                            <span id="ruleSummary" class="rule-chip">单题即判</span>
+                        </div>
+
+                        <div id="resultBanner" class="result-banner" hidden></div>
+
+                        <h2 id="questionText" class="question-text">正在加载题目...</h2>
+
+                        <div id="optionsContainer" class="options"></div>
+
+                        <div id="judgmentContainer" class="judgment-options" hidden>
+                            <button class="judgment-btn judgment-true" data-value="正确">正确</button>
+                            <button class="judgment-btn judgment-false" data-value="错误">错误</button>
+                        </div>
+
+                        <div id="emptyState" class="empty-state" hidden></div>
+                    </div>
+
+                    <div class="question-actions">
+                        <button id="prevBtn" class="btn btn-secondary">
+                            <i class="fas fa-chevron-left"></i> 上一题
+                        </button>
+                        <button id="questionSubmitBtn" class="btn btn-primary">
+                            <i class="fas fa-check"></i> 提交本题
+                        </button>
+                        <button id="nextBtn" class="btn btn-secondary">
+                            下一题 <i class="fas fa-chevron-right"></i>
+                        </button>
+                    </div>
+
+                    <section class="answer-section">
+                        <div class="section-header">
+                            <h3><i class="fas fa-clipboard-check"></i> 作答反馈</h3>
+                            <button id="finishExamBtn" class="btn btn-primary btn-small">
+                                <i class="fas fa-flag-checkered"></i> 交卷
+                            </button>
+                        </div>
+
+                        <div class="answer-grid">
+                            <div class="answer-card">
+                                <span class="answer-label">您的答案</span>
+                                <span id="userAnswerText" class="answer-value">未作答</span>
+                            </div>
+                            <div class="answer-card">
+                                <span class="answer-label">正确答案</span>
+                                <span id="correctAnswerText" class="answer-value muted-value">交卷后显示</span>
+                            </div>
+                            <div class="answer-card">
+                                <span class="answer-label">当前状态</span>
+                                <span id="answerStatus" class="answer-value status-text status-unanswered">未作答</span>
+                            </div>
+                        </div>
+
+                        <p id="answerNote" class="answer-note">
+                            当前模式为单题即判，选择答案后点击“提交本题”即可判定对错。
+                        </p>
+
+                        <div id="explanationBlock" class="explanation-block" hidden>
+                            <div class="explanation-header">
+                                <span>解析</span>
+                                <span class="muted-tag">来自 1432 题主库</span>
+                            </div>
+                            <p id="explanationText">暂无解析</p>
+                        </div>
+                    </section>
+                </section>
+
+                <aside class="sidebar">
+                    <section class="card rule-card">
+                        <h3><i class="fas fa-sliders-h"></i> 考试规则</h3>
+                        <label class="control-label" for="ruleModeSelect">判分模式</label>
+                        <select id="ruleModeSelect" class="control-select">
+                            <option value="instant">单题即判</option>
+                            <option value="final">交卷后统一判分</option>
+                            <option value="timer">倒计时交卷（120分钟）</option>
+                        </select>
+                        <p id="ruleHint" class="rule-hint"></p>
+
+                        <div id="timerPanel" class="timer-panel" hidden>
+                            <span class="timer-label">剩余时间</span>
+                            <strong id="timerDisplay" class="timer-value">02:00:00</strong>
+                        </div>
+
+                        <div class="composition-card">
+                            <span class="composition-label">本卷配比</span>
+                            <strong class="composition-value">70 单选 / 20 多选 / 10 判断</strong>
+                        </div>
+
+                        <button id="clearWrongSetBtn" class="btn btn-secondary clear-wrong-btn">
+                            <i class="fas fa-broom"></i> 清空共享错题集
+                        </button>
+                    </section>
+
+                    <section class="card stats-card">
+                        <h3><i class="fas fa-chart-line"></i> 成绩汇总</h3>
+                        <div class="stats-grid">
+                            <div class="stat-item accent">
+                                <span class="stat-label">得分</span>
+                                <strong id="scoreValue" class="stat-value">0</strong>
+                            </div>
+                            <div class="stat-item">
+                                <span class="stat-label">总题数</span>
+                                <strong id="totalQuestions" class="stat-value">100</strong>
+                            </div>
+                            <div class="stat-item">
+                                <span class="stat-label">已作答</span>
+                                <strong id="answeredCount" class="stat-value">0</strong>
+                            </div>
+                            <div class="stat-item">
+                                <span class="stat-label">正确</span>
+                                <strong id="correctCount" class="stat-value">0</strong>
+                            </div>
+                            <div class="stat-item">
+                                <span class="stat-label">错误</span>
+                                <strong id="incorrectCount" class="stat-value">0</strong>
+                            </div>
+                            <div class="stat-item">
+                                <span class="stat-label">未作答</span>
+                                <strong id="remainingCount" class="stat-value">100</strong>
+                            </div>
+                        </div>
+
+                        <div class="progress-block">
+                            <div class="progress-head">
+                                <span>作答进度</span>
+                                <span id="progressText">0%</span>
+                            </div>
+                            <div class="progress-bar">
+                                <div id="progressFill" class="progress-fill"></div>
+                            </div>
+                        </div>
+                    </section>
+
+                    <section class="card type-card">
+                        <h3><i class="fas fa-layer-group"></i> 题型进度</h3>
+                        <div class="type-progress-list">
+                            <div class="type-progress-item">
+                                <span>单选题</span>
+                                <strong id="singleProgress">总 70 | 已答 0 | 正确 --</strong>
+                            </div>
+                            <div class="type-progress-item">
+                                <span>多选题</span>
+                                <strong id="multipleProgress">总 20 | 已答 0 | 正确 --</strong>
+                            </div>
+                            <div class="type-progress-item">
+                                <span>判断题</span>
+                                <strong id="judgeProgress">总 10 | 已答 0 | 正确 --</strong>
+                            </div>
+                        </div>
+                    </section>
+
+                    <section class="card answer-sheet-card">
+                        <div class="card-head">
+                            <h3><i class="fas fa-border-all"></i> 答题卡</h3>
+                            <span id="sheetLegend" class="sheet-legend">蓝色表示已作答，交卷后显示对错。</span>
+                        </div>
+                        <div id="answerSheetGrid" class="answer-sheet-grid"></div>
+                    </section>
+                </aside>
+            </main>
+
+            <footer class="page-footer">
+                <p>考试进度仍单独保存在 <code>mock_exam_400_progress</code>；答错题会同步到原练习页的 <code>question_bank_progress</code> 错题集。</p>
+            </footer>
+        </div>
+    </div>
+
+    <script src="question-data.js"></script>
+    <script src="exam-question-map.js"></script>
+    <script src="mock-exam.js"></script>
+</body>
+</html>

@@ -23,6 +23,9 @@
             <div class="header-controls">
                 <button id="loadFile" class="btn"><i class="fas fa-folder-open"></i> 加载题库文件</button>
                 <input type="file" id="fileInput" accept=".txt" style="display: none;">
+                <button class="btn btn-primary" onclick="window.location.href='mock-exam.html'">
+                    <i class="fas fa-file-signature"></i> 进入模拟考试
+                </button>
                 <button id="exportBtn" class="btn"><i class="fas fa-download"></i> 导出进度</button>
                 <button id="importBtn" class="btn"><i class="fas fa-upload"></i> 导入进度</button>
                 <input type="file" id="importFile" accept=".json" style="display: none;">
@@ -117,6 +120,12 @@
                     </button>
                     <button id="removeWrongBook" class="btn btn-wrongbook-remove" style="display: none;">
                         <i class="fas fa-trash-alt"></i> 移除错题集
+                    </button>
+                    <button id="toggleWrongBookImport" class="btn btn-import-wrongbook">
+                        <i class="fas fa-paste"></i> 粘贴题号导入
+                    </button>
+                    <button id="clearWrongBook" class="btn btn-wrongbook-remove">
+                        <i class="fas fa-broom"></i> 清空错题集
                     </button>
                     <span class="wrong-book-hint" id="wrongBookHint"></span>
                 </div>
@@ -282,6 +291,42 @@
         <div class="loading-content">
             <div class="spinner"></div>
             <p>正在加载题库，请稍候...</p>
+        </div>
+    </div>
+
+    <div id="wrongBookImportPanel" class="wrong-book-import-panel" hidden>
+        <div class="wrong-book-import-dialog" role="dialog" aria-modal="true" aria-labelledby="wrongBookImportTitle">
+            <div class="wrong-book-import-header">
+                <div>
+                    <h3 id="wrongBookImportTitle">导入错题题号</h3>
+                    <p class="wrong-book-import-subtitle">仅支持 1432 主库题号；导入时会自动去重，并与现有错题集合并。</p>
+                </div>
+                <button id="closeWrongBookImport" class="wrong-book-import-close" type="button" aria-label="关闭导入弹窗">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+
+            <label class="wrong-book-import-label" for="wrongBookImportInput">
+                粘贴 1432 主库题号
+            </label>
+            <textarea
+                id="wrongBookImportInput"
+                class="wrong-book-import-input"
+                placeholder="支持空格、换行、逗号、顿号分隔，例如：&#10;12 35 108&#10;256, 300, 401"
+            ></textarea>
+
+            <div class="wrong-book-import-actions">
+                <button id="confirmWrongBookImport" class="btn btn-primary btn-small" type="button">
+                    <i class="fas fa-file-import"></i> 导入到错题集
+                </button>
+                <button id="cancelWrongBookImport" class="btn btn-secondary btn-small" type="button">
+                    <i class="fas fa-times"></i> 取消
+                </button>
+            </div>
+
+            <p id="wrongBookImportSummary" class="wrong-book-import-summary">
+                仅支持 1432 主库题号；导入时会自动去重，并与现有错题集合并。
+            </p>
         </div>
     </div>
 

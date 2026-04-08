@@ -51,6 +51,14 @@ document.addEventListener('DOMContentLoaded', function() {
         // 错题集
         toggleWrongBook: document.getElementById('toggleWrongBook'),
         removeWrongBook: document.getElementById('removeWrongBook'),
+        clearWrongBook: document.getElementById('clearWrongBook'),
+        toggleWrongBookImport: document.getElementById('toggleWrongBookImport'),
+        wrongBookImportPanel: document.getElementById('wrongBookImportPanel'),
+        wrongBookImportInput: document.getElementById('wrongBookImportInput'),
+        confirmWrongBookImport: document.getElementById('confirmWrongBookImport'),
+        cancelWrongBookImport: document.getElementById('cancelWrongBookImport'),
+        closeWrongBookImport: document.getElementById('closeWrongBookImport'),
+        wrongBookImportSummary: document.getElementById('wrongBookImportSummary'),
         wrongBookHint: document.getElementById('wrongBookHint'),
         
         // 导航按钮
@@ -561,6 +569,197 @@ document.addEventListener('DOMContentLoaded', function() {
         reader.readAsText(file);
     }
 
+    function setWrongBookImportSummary(message, type = 'info') {
+        if (!dom.wrongBookImportSummary) return;
+
+        dom.wrongBookImportSummary.textContent = message;
+        dom.wrongBookImportSummary.className = 'wrong-book-import-summary';
+
+        if (type !== 'info') {
+            dom.wrongBookImportSummary.classList.add(`is-${type}`);
+        }
+    }
+
+    function toggleWrongBookImportPanel(forceOpen) {
+        if (!dom.wrongBookImportPanel) return;
+
+        const shouldOpen = typeof forceOpen === 'boolean'
+            ? forceOpen
+            : dom.wrongBookImportPanel.hasAttribute('hidden');
+
+        if (shouldOpen) {
+            dom.wrongBookImportPanel.removeAttribute('hidden');
+            document.body.style.overflow = 'hidden';
+            setWrongBookImportSummary('仅支持 1432 主库题号；导入时会自动去重，并与现有错题集合并。');
+
+            if (dom.wrongBookImportInput) {
+                dom.wrongBookImportInput.focus();
+            }
+            return;
+        }
+
+        dom.wrongBookImportPanel.setAttribute('hidden', '');
+        document.body.style.overflow = '';
+        if (dom.wrongBookImportInput) {
+            dom.wrongBookImportInput.value = '';
+        }
+        setWrongBookImportSummary('仅支持 1432 主库题号；导入时会自动去重，并与现有错题集合并。');
+        if (dom.toggleWrongBookImport) {
+            dom.toggleWrongBookImport.focus();
+        }
+    }
+
+    function importWrongBookByIds() {
+        if (!dom.wrongBookImportInput) return;
+
+        const rawInput = dom.wrongBookImportInput.value.trim();
+        if (!rawInput) {
+            setWrongBookImportSummary('请先粘贴要导入的 1432 题号。', 'warning');
+            showToast('请先粘贴题号', 'warning');
+            dom.wrongBookImportInput.focus();
+            return;
+        }
+
+        const tokens = rawInput
+            .split(/[\s,，、;；]+/)
+            .map(token => token.trim())
+            .filter(Boolean);
+
+        if (tokens.length === 0) {
+            setWrongBookImportSummary('没有识别到有效内容，请检查粘贴格式。', 'warning');
+            showToast('没有识别到题号', 'warning');
+            return;
+        }
+
+        const questionIdSet = new Set(state.questions.map(q => q.id));
+        const uniqueValidIds = [];
+        const seenIds = new Set();
+        const invalidTokens = [];
+        let duplicateCount = 0;
+
+        tokens.forEach(token => {
+            if (!/^\d+$/.test(token)) {
+                invalidTokens.push(token);
+                return;
+            }
+
+            const id = Number(token);
+            if (!questionIdSet.has(id)) {
+                invalidTokens.push(token);
+                return;
+            }
+
+            if (seenIds.has(id)) {
+                duplicateCount += 1;
+                return;
+            }
+
+            seenIds.add(id);
+            uniqueValidIds.push(id);
+        });
+
+        if (uniqueValidIds.length === 0) {
+            const invalidPreview = invalidTokens.slice(0, 5).join('、');
+            const invalidSuffix = invalidTokens.length > 5 ? ` 等 ${invalidTokens.length} 个` : '';
+            setWrongBookImportSummary(
+                invalidTokens.length > 0
+                    ? `未找到可导入的有效题号。无效内容：${invalidPreview}${invalidSuffix}`
+                    : '未找到可导入的有效题号，请检查输入格式。',
+                'error'
+            );
+            showToast('没有可导入的有效题号', 'error');
+            return;
+        }
+
+        const existingWrongIds = new Set(
+            state.questions.filter(q => q.isWrongBook).map(q => q.id)
+        );
+        const newlyAddedIds = uniqueValidIds.filter(id => !existingWrongIds.has(id));
+        const alreadyExistingCount = uniqueValidIds.length - newlyAddedIds.length;
+        const importedIdSet = new Set(newlyAddedIds);
+
+        if (importedIdSet.size > 0) {
+            state.questions.forEach(question => {
+                if (importedIdSet.has(question.id)) {
+                    question.isWrongBook = true;
+                }
+            });
+
+            state.examQuestions.forEach(question => {
+                if (importedIdSet.has(question.id)) {
+                    question.isWrongBook = true;
+                }
+            });
+
+            state.reviewQuestions.forEach(question => {
+                if (importedIdSet.has(question.id)) {
+                    question.isWrongBook = true;
+                }
+            });
+
+            if (state.mode === 'review') {
+                const existingReviewIds = new Set(state.reviewQuestions.map(q => q.id));
+                const appendedReviewQuestions = state.questions
+                    .filter(q => importedIdSet.has(q.id) && !existingReviewIds.has(q.id))
+                    .sort((a, b) => a.id - b.id)
+                    .map(q => cloneQuestion(q));
+
+                if (appendedReviewQuestions.length > 0) {
+                    state.reviewQuestions = [...state.reviewQuestions, ...appendedReviewQuestions]
+                        .sort((a, b) => a.id - b.id);
+                    state.currentQuestions = [...state.reviewQuestions];
+                }
+            }
+        }
+
+        const currentQuestion = getCurrentQuestion();
+        if (currentQuestion) {
+            updateWrongBookButtons(currentQuestion);
+        }
+
+        renderQuestion();
+        updateStats();
+        renderAnswerSheet();
+        saveProgress();
+
+        const invalidPreview = invalidTokens.slice(0, 5).join('、');
+        const invalidSuffix = invalidTokens.length > 5 ? ` 等 ${invalidTokens.length} 个` : '';
+        const summaryParts = [];
+
+        if (newlyAddedIds.length > 0) {
+            summaryParts.push(`新增 ${newlyAddedIds.length} 道`);
+        }
+        if (alreadyExistingCount > 0) {
+            summaryParts.push(`已存在 ${alreadyExistingCount} 道`);
+        }
+        if (duplicateCount > 0) {
+            summaryParts.push(`重复输入 ${duplicateCount} 个`);
+        }
+        if (invalidTokens.length > 0) {
+            summaryParts.push(`无效 ${invalidTokens.length} 个${invalidPreview ? `（${invalidPreview}${invalidSuffix}）` : ''}`);
+        }
+
+        const summaryText = summaryParts.length > 0
+            ? `导入结果：${summaryParts.join('，')}。`
+            : '导入完成。';
+
+        setWrongBookImportSummary(
+            summaryText,
+            newlyAddedIds.length > 0 ? (invalidTokens.length > 0 ? 'warning' : 'success') : 'warning'
+        );
+
+        if (newlyAddedIds.length > 0) {
+            showToast(`已导入 ${newlyAddedIds.length} 道错题`, 'success');
+            if (invalidTokens.length === 0) {
+                toggleWrongBookImportPanel(false);
+            } else {
+                dom.wrongBookImportInput.value = '';
+            }
+        } else {
+            showToast('输入的题号都已在错题集中', 'info');
+        }
+    }
+
     // ==================== 题目渲染 ====================
     function renderQuestion() {
         if (state.questions.length === 0) return;
@@ -892,6 +1091,59 @@ document.addEventListener('DOMContentLoaded', function() {
         } else {
             showToast('已移出错题集');
         }
+    }
+
+    function clearWrongBook() {
+        const wrongBookQuestions = state.questions.filter(q => q.isWrongBook);
+        if (wrongBookQuestions.length === 0) {
+            showToast('错题集已为空', 'info');
+            return;
+        }
+
+        if (!confirm(`确定要清空错题集吗？将移除 ${wrongBookQuestions.length} 道题目的错题标记。`)) {
+            return;
+        }
+
+        state.questions.forEach(q => {
+            q.isWrongBook = false;
+        });
+        state.examQuestions.forEach(q => {
+            q.isWrongBook = false;
+        });
+        state.reviewQuestions.forEach(q => {
+            q.isWrongBook = false;
+        });
+
+        state.reviewQuestions = [];
+
+        if (state.mode === 'review') {
+            state.mode = 'normal';
+            state.currentQuestions = [];
+            state.currentIndex = 0;
+            if (dom.modeSelect) {
+                dom.modeSelect.value = 'normal';
+            }
+        }
+
+        if (state.filter === 'wrongbook') {
+            state.filter = 'all';
+            if (dom.filterRadios && dom.filterRadios.length > 0) {
+                dom.filterRadios.forEach(radio => {
+                    radio.checked = (radio.value === 'all');
+                });
+            }
+        }
+
+        const currentQuestion = getCurrentQuestion();
+        if (currentQuestion) {
+            updateWrongBookButtons(currentQuestion);
+        }
+
+        renderQuestion();
+        updateStats();
+        renderAnswerSheet();
+        saveProgress();
+        showToast('错题集已清空', 'success');
     }
     
     function navigateToQuestion(index) {
@@ -1623,6 +1875,48 @@ document.addEventListener('DOMContentLoaded', function() {
         // 错题集按钮
         dom.toggleWrongBook.addEventListener('click', toggleWrongBook);
         dom.removeWrongBook.addEventListener('click', toggleWrongBook);
+        if (dom.clearWrongBook) {
+            dom.clearWrongBook.addEventListener('click', clearWrongBook);
+        }
+        if (dom.toggleWrongBookImport) {
+            dom.toggleWrongBookImport.addEventListener('click', () => {
+                toggleWrongBookImportPanel();
+            });
+        }
+        if (dom.confirmWrongBookImport) {
+            dom.confirmWrongBookImport.addEventListener('click', importWrongBookByIds);
+        }
+        if (dom.cancelWrongBookImport) {
+            dom.cancelWrongBookImport.addEventListener('click', () => {
+                toggleWrongBookImportPanel(false);
+            });
+        }
+        if (dom.closeWrongBookImport) {
+            dom.closeWrongBookImport.addEventListener('click', () => {
+                toggleWrongBookImportPanel(false);
+            });
+        }
+        if (dom.wrongBookImportPanel) {
+            dom.wrongBookImportPanel.addEventListener('click', (e) => {
+                if (e.target === dom.wrongBookImportPanel) {
+                    toggleWrongBookImportPanel(false);
+                }
+            });
+        }
+        if (dom.wrongBookImportInput) {
+            dom.wrongBookImportInput.addEventListener('keydown', (e) => {
+                if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+                    e.preventDefault();
+                    importWrongBookByIds();
+                    return;
+                }
+
+                if (e.key === 'Escape') {
+                    e.preventDefault();
+                    toggleWrongBookImportPanel(false);
+                }
+            });
+        }
         
         // 解析显示/隐藏
         dom.toggleExplanation.addEventListener('click', () => {
@@ -1745,6 +2039,16 @@ document.addEventListener('DOMContentLoaded', function() {
         // 键盘快捷键
         document.addEventListener('keydown', (e) => {
             if (state.isLoading) return;
+
+            if (e.key === 'Escape' && dom.wrongBookImportPanel && !dom.wrongBookImportPanel.hasAttribute('hidden')) {
+                e.preventDefault();
+                toggleWrongBookImportPanel(false);
+                return;
+            }
+
+            const targetTag = e.target && e.target.tagName;
+            const isTypingTarget = ['INPUT', 'TEXTAREA', 'SELECT'].includes(targetTag) || (e.target && e.target.isContentEditable);
+            if (isTypingTarget) return;
             
             switch (e.key) {
                 case 'ArrowLeft':
