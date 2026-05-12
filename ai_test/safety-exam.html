@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>安规考试练习</title>
+    <link rel="stylesheet" href="safety-exam.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body>
+    <div class="page-shell">
+        <div class="container">
+            <header class="page-header">
+                <div class="header-copy">
+                    <p class="eyebrow">南方电网信息网络安规</p>
+                    <h1 id="pageTitle"><i class="fas fa-shield-halved"></i> 安规考试练习</h1>
+                    <p id="headerDescription" class="header-description">
+                        使用信息网络安规 Excel 题库，支持顺序练习、随机刷题、错题复习和保命题/非保命题两阶段正式考试。
+                    </p>
+                </div>
+                <div class="header-actions">
+                    <button id="backToPracticeBtn" class="btn btn-ghost" type="button">
+                        <i class="fas fa-arrow-left"></i> 返回功能入口
+                    </button>
+                    <button id="startExamBtn" class="btn btn-warning" type="button">
+                        <i class="fas fa-play"></i> 开始正式考试
+                    </button>
+                    <button id="resetPageBtn" class="btn btn-ghost" type="button">
+                        <i class="fas fa-rotate-right"></i> 重置本页进度
+                    </button>
+                </div>
+            </header>
+
+            <main class="layout">
+                <section class="question-panel">
+                    <section id="modeStrip" class="mode-strip" aria-label="练习模式">
+                        <button class="mode-btn active" data-mode="practice" type="button">
+                            <i class="fas fa-list-ol"></i> 顺序练习
+                        </button>
+                        <button class="mode-btn" data-mode="random" type="button">
+                            <i class="fas fa-shuffle"></i> 随机刷题
+                        </button>
+                        <button class="mode-btn" data-mode="exam" type="button">
+                            <i class="fas fa-file-signature"></i> 正式考试
+                        </button>
+                        <button class="mode-btn" data-mode="wrong" type="button">
+                            <i class="fas fa-bookmark"></i> 错题复习
+                        </button>
+                    </section>
+
+                    <div class="question-shell">
+                        <div class="question-meta">
+                            <div class="question-meta-left">
+                                <span id="questionType" class="question-pill">单选题</span>
+                                <span id="questionNumber" class="question-number">第 1 题 / 共 474 题</span>
+                            </div>
+                            <span id="stageChip" class="stage-chip">顺序练习</span>
+                        </div>
+
+                        <div id="resultBanner" class="result-banner" hidden></div>
+
+                        <div id="caseBlock" class="case-block" hidden>
+                            <div class="case-title"><i class="fas fa-file-lines"></i> 案例背景</div>
+                            <p id="caseText"></p>
+                        </div>
+
+                        <div id="questionTags" class="question-tags"></div>
+
+                        <h2 id="questionText" class="question-text">正在加载题目...</h2>
+
+                        <div id="optionsContainer" class="options"></div>
+
+                        <div id="judgmentContainer" class="judgment-options" hidden>
+                            <button class="judgment-btn judgment-true" data-value="正确" type="button">正确</button>
+                            <button class="judgment-btn judgment-false" data-value="错误" type="button">错误</button>
+                        </div>
+
+                        <div id="emptyState" class="empty-state" hidden></div>
+                    </div>
+
+                    <div class="question-actions">
+                        <button id="prevBtn" class="btn btn-secondary" type="button">
+                            <i class="fas fa-chevron-left"></i> 上一题
+                        </button>
+                        <button id="questionSubmitBtn" class="btn btn-primary" type="button">
+                            <i class="fas fa-check"></i> 提交答案
+                        </button>
+                        <button id="nextBtn" class="btn btn-secondary" type="button">
+                            下一题 <i class="fas fa-chevron-right"></i>
+                        </button>
+                    </div>
+
+                    <section class="answer-section">
+                        <div class="section-header">
+                            <h3><i class="fas fa-clipboard-check"></i> 作答反馈</h3>
+                            <div class="section-actions">
+                                <button id="wrongBookBtn" class="btn btn-secondary btn-small" type="button">
+                                    <i class="fas fa-bookmark"></i> 加入错题
+                                </button>
+                                <button id="stageSubmitBtn" class="btn btn-primary btn-small" type="button" hidden>
+                                    <i class="fas fa-flag-checkered"></i> 提交阶段
+                                </button>
+                            </div>
+                        </div>
+
+                        <div class="answer-grid">
+                            <div class="answer-card">
+                                <span class="answer-label">您的答案</span>
+                                <span id="userAnswerText" class="answer-value">未作答</span>
+                            </div>
+                            <div class="answer-card">
+                                <span class="answer-label">正确答案</span>
+                                <span id="correctAnswerText" class="answer-value muted-value">提交后显示</span>
+                            </div>
+                            <div class="answer-card">
+                                <span class="answer-label">当前状态</span>
+                                <span id="answerStatus" class="answer-value status-text status-unanswered">未作答</span>
+                            </div>
+                        </div>
+
+                        <p id="answerNote" class="answer-note">练习模式下提交本题后显示答案与解析。</p>
+
+                        <div id="explanationBlock" class="explanation-block" hidden>
+                            <div class="explanation-header">
+                                <span>解析</span>
+                                <span id="explanationTag" class="muted-tag">制度条款</span>
+                            </div>
+                            <p id="explanationText">暂无解析</p>
+                        </div>
+                    </section>
+                </section>
+
+                <aside class="sidebar">
+                    <section class="card rule-card">
+                        <h3><i class="fas fa-sliders-h"></i> 考试规则</h3>
+                        <div class="timer-panel">
+                            <span class="timer-label">剩余时间</span>
+                            <strong id="timerDisplay" class="timer-value">60:00</strong>
+                        </div>
+                        <div class="composition-card">
+                            <span class="composition-label">保命题阶段</span>
+                            <strong class="composition-value">10 题 / 20 分 / 3 次机会 / 必须满分</strong>
+                        </div>
+                        <div class="composition-card">
+                            <span class="composition-label">非保命题阶段</span>
+                            <strong class="composition-value">45 题 / 80 分 / 70 分及格</strong>
+                        </div>
+                        <p id="ruleHint" class="rule-hint">
+                            正式考试全流程 60 分钟，保命题通过后进入非保命题，总分达到 90 分为通过。
+                        </p>
+                    </section>
+
+                    <section class="card stats-card">
+                        <h3><i class="fas fa-chart-line"></i> 状态汇总</h3>
+                        <div class="stats-grid">
+                            <div class="stat-item accent">
+                                <span class="stat-label">得分</span>
+                                <strong id="scoreValue" class="stat-value">0</strong>
+                            </div>
+                            <div class="stat-item">
+                                <span class="stat-label">题目数</span>
+                                <strong id="totalQuestions" class="stat-value">474</strong>
+                            </div>
+                            <div class="stat-item">
+                                <span class="stat-label">已作答</span>
+                                <strong id="answeredCount" class="stat-value">0</strong>
+                            </div>
+                            <div class="stat-item">
+                                <span class="stat-label">正确</span>
+                                <strong id="correctCount" class="stat-value">0</strong>
+                            </div>
+                            <div class="stat-item">
+                                <span class="stat-label">错误</span>
+                                <strong id="incorrectCount" class="stat-value">0</strong>
+                            </div>
+                            <div class="stat-item">
+                                <span class="stat-label">错题集</span>
+                                <strong id="wrongCount" class="stat-value">0</strong>
+                            </div>
+                        </div>
+
+                        <div class="progress-block">
+                            <div class="progress-head">
+                                <span>作答进度</span>
+                                <span id="progressText">0%</span>
+                            </div>
+                            <div class="progress-bar">
+                                <div id="progressFill" class="progress-fill"></div>
+                            </div>
+                        </div>
+                    </section>
+
+                    <section class="card type-card">
+                        <h3><i class="fas fa-layer-group"></i> 题型进度</h3>
+                        <div class="type-progress-list">
+                            <div class="type-progress-item">
+                                <span>单选题</span>
+                                <strong id="singleProgress">总 0 | 已答 0 | 正确 --</strong>
+                            </div>
+                            <div class="type-progress-item">
+                                <span>多选题</span>
+                                <strong id="multipleProgress">总 0 | 已答 0 | 正确 --</strong>
+                            </div>
+                            <div class="type-progress-item">
+                                <span>判断题</span>
+                                <strong id="judgeProgress">总 0 | 已答 0 | 正确 --</strong>
+                            </div>
+                        </div>
+                    </section>
+
+                    <section class="card answer-sheet-card">
+                        <div class="card-head">
+                            <h3><i class="fas fa-border-all"></i> 答题卡</h3>
+                            <span id="sheetLegend" class="sheet-legend">点击题号可快速跳转。</span>
+                        </div>
+                        <div id="answerSheetGrid" class="answer-sheet-grid"></div>
+                    </section>
+                </aside>
+            </main>
+
+            <footer class="page-footer">
+                <p>安规练习进度保存在 <code>safety_exam_practice_progress_v1</code>，正式考试会话保存在 <code>safety_exam_session_v1</code>。</p>
+            </footer>
+        </div>
+    </div>
+
+    <script src="safety-question-data.js"></script>
+    <script src="safety-exam.js"></script>
+</body>
+</html>

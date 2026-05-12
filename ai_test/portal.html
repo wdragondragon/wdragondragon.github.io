@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>题库入口</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        :root {
+            --bg: #f3f7fb;
+            --surface: #ffffff;
+            --surface-soft: #f6f9fd;
+            --text-main: #1f2d3d;
+            --text-subtle: #61748a;
+            --border: #d7e2ef;
+            --primary: #1f7ae0;
+            --success: #1f9d61;
+            --warning: #d89018;
+            --shadow: 0 16px 34px rgba(38, 72, 113, 0.12);
+            --radius: 12px;
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            min-height: 100vh;
+            font-family: "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+            color: var(--text-main);
+            background:
+                radial-gradient(circle at top left, rgba(31, 122, 224, 0.12), transparent 28%),
+                radial-gradient(circle at top right, rgba(31, 157, 97, 0.08), transparent 24%),
+                var(--bg);
+        }
+
+        .page-shell {
+            padding: 28px 18px 42px;
+        }
+
+        .container {
+            max-width: 1180px;
+            margin: 0 auto;
+        }
+
+        .header {
+            display: flex;
+            justify-content: space-between;
+            gap: 20px;
+            align-items: flex-start;
+            margin-bottom: 22px;
+            padding: 26px 28px;
+            border-radius: var(--radius);
+            color: #fff;
+            background: linear-gradient(135deg, rgba(16, 37, 66, 0.96), rgba(31, 122, 224, 0.92));
+            box-shadow: var(--shadow);
+        }
+
+        .header h1 {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin: 0;
+            font-size: 30px;
+            line-height: 1.2;
+        }
+
+        .header p {
+            max-width: 720px;
+            margin: 12px 0 0;
+            color: rgba(255, 255, 255, 0.88);
+            line-height: 1.7;
+        }
+
+        .entry-grid {
+            display: grid;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 18px;
+        }
+
+        .entry-card {
+            display: flex;
+            flex-direction: column;
+            min-height: 280px;
+            padding: 24px;
+            border: 1px solid rgba(215, 226, 239, 0.9);
+            border-radius: var(--radius);
+            background: var(--surface);
+            box-shadow: var(--shadow);
+            text-decoration: none;
+            color: inherit;
+            transition: transform 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease;
+        }
+
+        .entry-card:hover {
+            transform: translateY(-2px);
+            border-color: rgba(31, 122, 224, 0.42);
+            box-shadow: 0 18px 38px rgba(38, 72, 113, 0.16);
+        }
+
+        .entry-icon {
+            width: 52px;
+            height: 52px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            margin-bottom: 20px;
+            border-radius: 50%;
+            color: #fff;
+            font-size: 22px;
+        }
+
+        .entry-card.practice .entry-icon {
+            background: linear-gradient(135deg, var(--success), #3fbd81);
+        }
+
+        .entry-card.exam .entry-icon {
+            background: linear-gradient(135deg, var(--warning), #efaa32);
+        }
+
+        .entry-card.ai .entry-icon {
+            background: linear-gradient(135deg, var(--primary), #49a4ff);
+        }
+
+        .entry-card h2 {
+            margin: 0;
+            font-size: 22px;
+        }
+
+        .entry-card p {
+            margin: 12px 0 0;
+            color: var(--text-subtle);
+            line-height: 1.7;
+            font-size: 15px;
+        }
+
+        .meta-list {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-top: 18px;
+        }
+
+        .meta-list span {
+            padding: 6px 10px;
+            border-radius: 999px;
+            background: var(--surface-soft);
+            border: 1px solid var(--border);
+            color: var(--text-subtle);
+            font-size: 12px;
+            font-weight: 700;
+        }
+
+        .entry-action {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            margin-top: auto;
+            padding-top: 22px;
+            color: var(--primary);
+            font-weight: 800;
+        }
+
+        .footer {
+            margin-top: 22px;
+            padding: 16px 20px;
+            border-radius: var(--radius);
+            border: 1px solid rgba(215, 226, 239, 0.9);
+            background: rgba(255, 255, 255, 0.82);
+            color: var(--text-subtle);
+            font-size: 14px;
+        }
+
+        @media (max-width: 960px) {
+            .entry-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        @media (max-width: 620px) {
+            .page-shell {
+                padding: 18px 12px 28px;
+            }
+
+            .header {
+                padding: 22px 20px;
+            }
+
+            .header h1 {
+                font-size: 24px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="page-shell">
+        <div class="container">
+            <header class="header">
+                <div>
+                    <h1><i class="fas fa-table-list"></i> 题库入口</h1>
+                    <p>安规练习、安规正式考试和人工智能训练题分开进入，互不混用进度和题库。</p>
+                </div>
+            </header>
+
+            <main class="entry-grid">
+                <a class="entry-card practice" href="safety-exam.html?view=practice">
+                    <span class="entry-icon"><i class="fas fa-shield-halved"></i></span>
+                    <h2>安规练习</h2>
+                    <p>使用信息网络安规题库做顺序练习、随机刷题和错题复习。</p>
+                    <div class="meta-list">
+                        <span>474 题</span>
+                        <span>练习进度独立保存</span>
+                        <span>错题复习</span>
+                    </div>
+                    <span class="entry-action">进入练习 <i class="fas fa-arrow-right"></i></span>
+                </a>
+
+                <a class="entry-card exam" href="safety-exam.html?view=exam">
+                    <span class="entry-icon"><i class="fas fa-file-signature"></i></span>
+                    <h2>安规正式考试</h2>
+                    <p>按保命题和非保命题两阶段规则抽卷，60 分钟内完成并即时发布成绩。</p>
+                    <div class="meta-list">
+                        <span>10 道保命题</span>
+                        <span>45 道非保命题</span>
+                        <span>满 90 分通过</span>
+                    </div>
+                    <span class="entry-action">进入考试 <i class="fas fa-arrow-right"></i></span>
+                </a>
+
+                <a class="entry-card ai" href="index.html">
+                    <span class="entry-icon"><i class="fas fa-graduation-cap"></i></span>
+                    <h2>人工智能训练题</h2>
+                    <p>进入原有 AI 题库训练系统，继续使用 1432 题主库、筛选和模拟考试入口。</p>
+                    <div class="meta-list">
+                        <span>原题库</span>
+                        <span>分类筛选</span>
+                        <span>模拟考试</span>
+                    </div>
+                    <span class="entry-action">进入训练 <i class="fas fa-arrow-right"></i></span>
+                </a>
+            </main>
+
+            <footer class="footer">
+                <span>安规题库和人工智能训练题使用不同本地存储 key，答题进度互不影响。</span>
+            </footer>
+        </div>
+    </div>
+</body>
+</html>
