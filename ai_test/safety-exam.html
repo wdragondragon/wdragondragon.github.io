@@ -49,9 +49,13 @@
                     </section>
 
                     <section id="practiceTools" class="practice-tools" aria-label="题目筛选">
-                        <label class="search-field" for="questionSearchInput">
-                            <i class="fas fa-magnifying-glass" aria-hidden="true"></i>
-                            <input id="questionSearchInput" type="search" placeholder="搜索题干、选项" autocomplete="off">
+                        <label class="filter-select" for="lifeFilterSelect">
+                            <span>范围</span>
+                            <select id="lifeFilterSelect">
+                                <option value="">全部</option>
+                                <option value="life">保命题</option>
+                                <option value="normal">非保命题</option>
+                            </select>
                         </label>
                         <label class="filter-select" for="difficultyFilterSelect">
                             <span>难度</span>
@@ -68,11 +72,11 @@
                                 <option value="judge">判断题</option>
                             </select>
                         </label>
+                        <button id="unattemptedFilterBtn" class="filter-toggle" type="button" aria-pressed="false">
+                            <i class="fas fa-circle-dot"></i> 未做过
+                        </button>
                         <button id="optionShuffleBtn" class="filter-toggle" type="button" aria-pressed="false">
                             <i class="fas fa-shuffle"></i> 选项乱序
-                        </button>
-                        <button id="lifeFilterBtn" class="filter-toggle" type="button" aria-pressed="false">
-                            <i class="fas fa-shield-halved"></i> 保命题
                         </button>
                         <button id="clearFiltersBtn" class="filter-clear" type="button" hidden>
                             <i class="fas fa-xmark"></i> 清空筛选
@@ -90,6 +94,11 @@
                         </div>
 
                         <div id="resultBanner" class="result-banner" hidden></div>
+
+                        <label id="questionSearchField" class="search-field question-search-field" for="questionSearchInput">
+                            <i class="fas fa-magnifying-glass" aria-hidden="true"></i>
+                            <input id="questionSearchInput" type="search" placeholder="搜索题干、选项" autocomplete="off">
+                        </label>
 
                         <div id="caseBlock" class="case-block" hidden>
                             <div class="case-title"><i class="fas fa-file-lines"></i> 案例背景</div>

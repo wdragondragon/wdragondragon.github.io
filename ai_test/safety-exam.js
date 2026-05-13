@@ -302,11 +302,13 @@
             modeStrip: document.getElementById('modeStrip'),
             modeButtons: Array.from(document.querySelectorAll('.mode-btn')),
             practiceTools: document.getElementById('practiceTools'),
+            questionSearchField: document.getElementById('questionSearchField'),
             questionSearchInput: document.getElementById('questionSearchInput'),
+            lifeFilterSelect: document.getElementById('lifeFilterSelect'),
             difficultyFilterSelect: document.getElementById('difficultyFilterSelect'),
             typeFilterSelect: document.getElementById('typeFilterSelect'),
             optionShuffleBtn: document.getElementById('optionShuffleBtn'),
-            lifeFilterBtn: document.getElementById('lifeFilterBtn'),
+            unattemptedFilterBtn: document.getElementById('unattemptedFilterBtn'),
             clearFiltersBtn: document.getElementById('clearFiltersBtn'),
             filterSummary: document.getElementById('filterSummary'),
             questionText: document.getElementById('questionText'),
@@ -366,7 +368,8 @@
             },
             randomOrder: [],
             filters: {
-                lifeOnly: false,
+                lifeScope: '',
+                unattemptedOnly: false,
                 query: '',
                 difficulty: '',
                 type: ''
@@ -558,7 +561,14 @@
         }
 
         function matchesPracticeFilters(question) {
-            if (state.filters.lifeOnly && !question.isLifeSaving) {
+            if (state.filters.lifeScope === 'life' && !question.isLifeSaving) {
+                return false;
+            }
+            if (state.filters.lifeScope === 'normal' && question.isLifeSaving) {
+                return false;
+            }
+            if (state.filters.unattemptedOnly &&
+                (question.userAnswer || question.status !== STATUS.UNANSWERED)) {
                 return false;
             }
             if (state.filters.difficulty && question.difficulty !== state.filters.difficulty) {
@@ -575,7 +585,8 @@
         }
 
         function hasActiveFilters() {
-            return state.filters.lifeOnly ||
+            return Boolean(state.filters.lifeScope) ||
+                state.filters.unattemptedOnly ||
                 Boolean(normalizeSearchValue(state.filters.query)) ||
                 Boolean(state.filters.difficulty) ||
                 Boolean(state.filters.type);
@@ -863,12 +874,16 @@
         }
 
         function clearPracticeFilters() {
-            state.filters.lifeOnly = false;
+            state.filters.lifeScope = '';
+            state.filters.unattemptedOnly = false;
             state.filters.query = '';
             state.filters.difficulty = '';
             state.filters.type = '';
             if (dom.questionSearchInput) {
                 dom.questionSearchInput.value = '';
+            }
+            if (dom.lifeFilterSelect) {
+                dom.lifeFilterSelect.value = '';
             }
             if (dom.difficultyFilterSelect) {
                 dom.difficultyFilterSelect.value = '';
@@ -1222,13 +1237,17 @@
             state.optionShuffle = false;
             state.visibleResultKey = null;
             state.filters = {
-                lifeOnly: false,
+                lifeScope: '',
+                unattemptedOnly: false,
                 query: '',
                 difficulty: '',
                 type: ''
             };
             if (dom.questionSearchInput) {
                 dom.questionSearchInput.value = '';
+            }
+            if (dom.lifeFilterSelect) {
+                dom.lifeFilterSelect.value = '';
             }
             if (dom.difficultyFilterSelect) {
                 dom.difficultyFilterSelect.value = '';
@@ -1273,6 +1292,7 @@
         function renderPracticeTools() {
             const enabled = state.mode !== MODES.EXAM && pageView !== PAGE_VIEWS.EXAM;
             dom.practiceTools.hidden = !enabled;
+            dom.questionSearchField.hidden = !enabled;
             if (!enabled) {
                 return;
             }
@@ -1280,14 +1300,17 @@
             if (dom.questionSearchInput && dom.questionSearchInput.value !== state.filters.query) {
                 dom.questionSearchInput.value = state.filters.query;
             }
+            if (dom.lifeFilterSelect && dom.lifeFilterSelect.value !== state.filters.lifeScope) {
+                dom.lifeFilterSelect.value = state.filters.lifeScope;
+            }
             if (dom.difficultyFilterSelect && dom.difficultyFilterSelect.value !== state.filters.difficulty) {
                 dom.difficultyFilterSelect.value = state.filters.difficulty;
             }
             if (dom.typeFilterSelect && dom.typeFilterSelect.value !== state.filters.type) {
                 dom.typeFilterSelect.value = state.filters.type;
             }
-            dom.lifeFilterBtn.classList.toggle('active', state.filters.lifeOnly);
-            dom.lifeFilterBtn.setAttribute('aria-pressed', state.filters.lifeOnly ? 'true' : 'false');
+            dom.unattemptedFilterBtn.classList.toggle('active', state.filters.unattemptedOnly);
+            dom.unattemptedFilterBtn.setAttribute('aria-pressed', state.filters.unattemptedOnly ? 'true' : 'false');
             dom.optionShuffleBtn.classList.toggle('active', state.optionShuffle);
             dom.optionShuffleBtn.setAttribute('aria-pressed', state.optionShuffle ? 'true' : 'false');
             dom.clearFiltersBtn.hidden = !hasActiveFilters();
@@ -1800,6 +1823,10 @@
                 state.filters.query = dom.questionSearchInput.value;
                 applyPracticeFilters();
             });
+            dom.lifeFilterSelect.addEventListener('change', function () {
+                state.filters.lifeScope = dom.lifeFilterSelect.value;
+                applyPracticeFilters();
+            });
             dom.difficultyFilterSelect.addEventListener('change', function () {
                 state.filters.difficulty = dom.difficultyFilterSelect.value;
                 applyPracticeFilters();
@@ -1808,8 +1835,8 @@
                 state.filters.type = dom.typeFilterSelect.value;
                 applyPracticeFilters();
             });
-            dom.lifeFilterBtn.addEventListener('click', function () {
-                state.filters.lifeOnly = !state.filters.lifeOnly;
+            dom.unattemptedFilterBtn.addEventListener('click', function () {
+                state.filters.unattemptedOnly = !state.filters.unattemptedOnly;
                 applyPracticeFilters();
             });
             dom.optionShuffleBtn.addEventListener('click', function () {

@@ -133,7 +133,7 @@ code {
 
 .practice-tools {
     display: grid;
-    grid-template-columns: minmax(220px, 1fr) minmax(132px, auto) minmax(132px, auto) auto auto auto auto;
+    grid-template-columns: repeat(3, minmax(132px, auto)) auto auto auto minmax(96px, 1fr);
     align-items: center;
     gap: 10px;
     padding: 12px;
@@ -176,6 +176,10 @@ code {
 
 .search-field input::placeholder {
     color: rgba(95, 114, 135, 0.78);
+}
+
+.question-search-field {
+    margin: 14px 0 4px;
 }
 
 .filter-select {
