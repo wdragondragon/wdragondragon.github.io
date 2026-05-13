@@ -133,7 +133,7 @@ code {
 
 .practice-tools {
     display: grid;
-    grid-template-columns: minmax(220px, 1fr) minmax(132px, auto) minmax(132px, auto) auto auto auto;
+    grid-template-columns: minmax(220px, 1fr) minmax(132px, auto) minmax(132px, auto) auto auto auto auto;
     align-items: center;
     gap: 10px;
     padding: 12px;

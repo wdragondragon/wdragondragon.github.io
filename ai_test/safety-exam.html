@@ -68,6 +68,9 @@
                                 <option value="judge">判断题</option>
                             </select>
                         </label>
+                        <button id="optionShuffleBtn" class="filter-toggle" type="button" aria-pressed="false">
+                            <i class="fas fa-shuffle"></i> 选项乱序
+                        </button>
                         <button id="lifeFilterBtn" class="filter-toggle" type="button" aria-pressed="false">
                             <i class="fas fa-shield-halved"></i> 保命题
                         </button>
@@ -123,6 +126,9 @@
                         <div class="section-header">
                             <h3><i class="fas fa-clipboard-check"></i> 作答反馈</h3>
                             <div class="section-actions">
+                                <button id="retryQuestionBtn" class="btn btn-secondary btn-small" type="button" hidden>
+                                    <i class="fas fa-rotate-right"></i> 重新答题
+                                </button>
                                 <button id="wrongBookBtn" class="btn btn-secondary btn-small" type="button">
                                     <i class="fas fa-bookmark"></i> 加入错题
                                 </button>

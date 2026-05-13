@@ -112,6 +112,29 @@
         return clone;
     }
 
+    function createOptionOrder(options) {
+        return shuffle((options || []).map(function (option) {
+            return option.letter;
+        }));
+    }
+
+    function normalizeOptionOrder(options, optionOrder) {
+        const letters = (options || []).map(function (option) {
+            return option.letter;
+        });
+        if (!Array.isArray(optionOrder)) {
+            return createOptionOrder(options);
+        }
+
+        const unique = [];
+        optionOrder.forEach(function (letter) {
+            if (letters.includes(letter) && !unique.includes(letter)) {
+                unique.push(letter);
+            }
+        });
+        return unique.length === letters.length ? unique : createOptionOrder(options);
+    }
+
     function countByType(questions) {
         return questions.reduce(function (counts, question) {
             counts[question.type] = (counts[question.type] || 0) + 1;
@@ -146,9 +169,12 @@
             keywords: question.keywords || '',
             specialty: question.specialty || '',
             isLifeSaving: Boolean(question.isLifeSaving),
+            optionOrder: createOptionOrder(question.options),
             userAnswer: null,
             status: STATUS.UNANSWERED,
-            isWrongBook: false
+            isWrongBook: false,
+            retrying: false,
+            draftAnswer: null
         };
     }
 
@@ -177,6 +203,7 @@
             keywords: question.keywords || '',
             specialty: question.specialty || '',
             isLifeSaving: Boolean(question.isLifeSaving),
+            optionOrder: createOptionOrder(question.options),
             userAnswer: null,
             status: STATUS.UNANSWERED,
             locked: false,
@@ -278,6 +305,7 @@
             questionSearchInput: document.getElementById('questionSearchInput'),
             difficultyFilterSelect: document.getElementById('difficultyFilterSelect'),
             typeFilterSelect: document.getElementById('typeFilterSelect'),
+            optionShuffleBtn: document.getElementById('optionShuffleBtn'),
             lifeFilterBtn: document.getElementById('lifeFilterBtn'),
             clearFiltersBtn: document.getElementById('clearFiltersBtn'),
             filterSummary: document.getElementById('filterSummary'),
@@ -297,6 +325,7 @@
             nextBtn: document.getElementById('nextBtn'),
             questionSubmitBtn: document.getElementById('questionSubmitBtn'),
             stageSubmitBtn: document.getElementById('stageSubmitBtn'),
+            retryQuestionBtn: document.getElementById('retryQuestionBtn'),
             wrongBookBtn: document.getElementById('wrongBookBtn'),
             startExamBtn: document.getElementById('startExamBtn'),
             resetPageBtn: document.getElementById('resetPageBtn'),
@@ -347,7 +376,7 @@
             currentIndex: 0,
             exam: null,
             timerId: null,
-            activeQuestionKey: null
+            optionShuffle: false
         };
 
         state.sourceQuestions.forEach(function (question) {
@@ -426,36 +455,46 @@
             return state.currentQuestions[state.currentIndex] || null;
         }
 
-        function getCurrentQuestionKey(question) {
-            if (!question) {
-                return '';
-            }
-            return state.mode + ':' + (question.originalId || question.id);
-        }
-
         function isResultStatus(status) {
             return status === STATUS.CORRECT || status === STATUS.INCORRECT;
         }
 
-        function resetQuestionForRepeat(question) {
-            if (state.mode === MODES.EXAM || !question || !isResultStatus(question.status)) {
-                return;
-            }
-            question.userAnswer = null;
-            question.status = STATUS.UNANSWERED;
-            savePracticeProgress();
+        function isQuestionRetrying(question) {
+            return state.mode !== MODES.EXAM && Boolean(question && question.retrying);
         }
 
-        function prepareQuestionForRepeat(question) {
-            if (state.mode === MODES.EXAM) {
+        function beginRetryQuestion(question) {
+            if (state.mode === MODES.EXAM || !question || !isResultStatus(question.status)) {
+                return false;
+            }
+            question.retrying = true;
+            question.draftAnswer = null;
+            return true;
+        }
+
+        function clearRetryState(question) {
+            if (!question) {
                 return;
             }
-            const questionKey = getCurrentQuestionKey(question);
-            const isNewQuestion = questionKey !== state.activeQuestionKey;
-            state.activeQuestionKey = questionKey;
-            if (isNewQuestion) {
-                resetQuestionForRepeat(question);
+            question.retrying = false;
+            question.draftAnswer = null;
+        }
+
+        function getQuestionUserAnswer(question) {
+            if (!question) {
+                return null;
             }
+            return isQuestionRetrying(question) ? question.draftAnswer : question.userAnswer;
+        }
+
+        function setQuestionUserAnswer(question, answer) {
+            const normalizedAnswer = answer || null;
+            if (isQuestionRetrying(question)) {
+                question.draftAnswer = normalizedAnswer;
+                return;
+            }
+            question.userAnswer = normalizedAnswer;
+            question.status = question.userAnswer ? STATUS.ANSWERING : STATUS.UNANSWERED;
         }
 
         function normalizeSearchValue(value) {
@@ -522,6 +561,7 @@
                 mode: state.mode === MODES.EXAM ? MODES.PRACTICE : state.mode,
                 modeIndexes: state.modeIndexes,
                 randomOrder: state.randomOrder,
+                optionShuffle: state.optionShuffle,
                 questions: state.sourceQuestions
                     .filter(function (question) {
                         return question.userAnswer || question.status !== STATUS.UNANSWERED || question.isWrongBook;
@@ -556,6 +596,7 @@
                         return state.sourceById.has(id);
                     });
                 }
+                state.optionShuffle = Boolean(saved.optionShuffle);
                 if (Array.isArray(saved.questions)) {
                     saved.questions.forEach(function (progress) {
                         const question = state.sourceById.get(progress.id);
@@ -579,7 +620,8 @@
                 status: question.status,
                 locked: question.locked,
                 isCorrect: question.isCorrect,
-                earnedScore: question.earnedScore
+                earnedScore: question.earnedScore,
+                optionOrder: question.optionOrder
             };
         }
 
@@ -622,6 +664,7 @@
             question.locked = Boolean(progress.locked);
             question.isCorrect = progress.isCorrect;
             question.earnedScore = progress.earnedScore || 0;
+            question.optionOrder = normalizeOptionOrder(question.options, progress.optionOrder);
             return question;
         }
 
@@ -748,7 +791,6 @@
             }
             saveCurrentIndex();
             state.mode = mode;
-            state.activeQuestionKey = null;
             if (mode === MODES.EXAM && state.exam && state.exam.active) {
                 startTimer();
             }
@@ -759,7 +801,6 @@
 
         function applyPracticeFilters() {
             resetCurrentPracticeIndex();
-            state.activeQuestionKey = null;
             syncCurrentQuestions();
             render();
         }
@@ -809,21 +850,26 @@
                 return;
             }
 
-            if (question.type === QUESTION_TYPES.MULTIPLE) {
-                const current = question.userAnswer || '';
-                if (current.includes(answer)) {
-                    question.userAnswer = current.replace(answer, '') || null;
-                } else {
-                    question.userAnswer = (current + answer).split('').sort().join('');
-                }
-            } else {
-                question.userAnswer = answer;
+            if (state.mode !== MODES.EXAM && isResultStatus(question.status) && !isQuestionRetrying(question)) {
+                beginRetryQuestion(question);
             }
 
-            question.status = question.userAnswer ? STATUS.ANSWERING : STATUS.UNANSWERED;
+            let nextAnswer;
+            if (question.type === QUESTION_TYPES.MULTIPLE) {
+                const current = getQuestionUserAnswer(question) || '';
+                if (current.includes(answer)) {
+                    nextAnswer = current.replace(answer, '') || null;
+                } else {
+                    nextAnswer = (current + answer).split('').sort().join('');
+                }
+            } else {
+                nextAnswer = answer;
+            }
+
+            setQuestionUserAnswer(question, nextAnswer);
             if (state.mode === MODES.EXAM) {
                 saveExamSession();
-            } else {
+            } else if (!isQuestionRetrying(question)) {
                 savePracticeProgress();
             }
             renderQuestion();
@@ -844,7 +890,7 @@
                 showToast('当前没有可提交的题目', 'warning');
                 return;
             }
-            if (!question.userAnswer) {
+            if (!getQuestionUserAnswer(question)) {
                 showToast('请先选择答案', 'warning');
                 return;
             }
@@ -861,6 +907,10 @@
                 return;
             }
 
+            if (isQuestionRetrying(question)) {
+                question.userAnswer = question.draftAnswer;
+                clearRetryState(question);
+            }
             const correct = isAnswerCorrect(question);
             question.status = correct ? STATUS.CORRECT : STATUS.INCORRECT;
             if (!correct) {
@@ -869,6 +919,14 @@
             savePracticeProgress();
             render();
             showToast(correct ? '回答正确' : '回答错误，已加入错题集', correct ? 'success' : 'error');
+        }
+
+        function retryCurrentQuestion() {
+            const question = getCurrentQuestion();
+            if (!beginRetryQuestion(question)) {
+                return;
+            }
+            render();
         }
 
         function submitExamStage() {
@@ -1082,7 +1140,6 @@
 
         function navigateTo(index) {
             state.currentIndex = clamp(index, 0, state.currentQuestions.length - 1);
-            state.activeQuestionKey = null;
             saveCurrentIndex();
             render();
         }
@@ -1120,6 +1177,8 @@
                 question.userAnswer = null;
                 question.status = STATUS.UNANSWERED;
                 question.isWrongBook = false;
+                question.optionOrder = createOptionOrder(question.options);
+                clearRetryState(question);
             });
             state.mode = MODES.PRACTICE;
             state.modeIndexes = {
@@ -1129,7 +1188,7 @@
                 [MODES.EXAM]: 0
             };
             state.randomOrder = [];
-            state.activeQuestionKey = null;
+            state.optionShuffle = false;
             state.filters = {
                 lifeOnly: false,
                 query: '',
@@ -1153,6 +1212,9 @@
 
         function shouldRevealAnswer(question) {
             if (!question) {
+                return false;
+            }
+            if (isQuestionRetrying(question)) {
                 return false;
             }
             if (state.mode === MODES.EXAM) {
@@ -1194,6 +1256,8 @@
             }
             dom.lifeFilterBtn.classList.toggle('active', state.filters.lifeOnly);
             dom.lifeFilterBtn.setAttribute('aria-pressed', state.filters.lifeOnly ? 'true' : 'false');
+            dom.optionShuffleBtn.classList.toggle('active', state.optionShuffle);
+            dom.optionShuffleBtn.setAttribute('aria-pressed', state.optionShuffle ? 'true' : 'false');
             dom.clearFiltersBtn.hidden = !hasActiveFilters();
             dom.filterSummary.textContent = getFilterSummaryText();
         }
@@ -1218,7 +1282,6 @@
         function renderQuestion() {
             const question = getCurrentQuestion();
             const hasQuestion = Boolean(question);
-            prepareQuestionForRepeat(question);
 
             dom.emptyState.hidden = hasQuestion;
             dom.optionsContainer.innerHTML = '';
@@ -1309,17 +1372,37 @@
             });
         }
 
+        function shouldShuffleOptions(question) {
+            return Boolean(question &&
+                question.type !== QUESTION_TYPES.JUDGE &&
+                (state.mode === MODES.EXAM || state.optionShuffle));
+        }
+
+        function getRenderOptions(question) {
+            if (!shouldShuffleOptions(question)) {
+                return question.options;
+            }
+            question.optionOrder = normalizeOptionOrder(question.options, question.optionOrder);
+            const optionsByLetter = new Map(question.options.map(function (option) {
+                return [option.letter, option];
+            }));
+            return question.optionOrder.map(function (letter) {
+                return optionsByLetter.get(letter);
+            }).filter(Boolean);
+        }
+
         function renderOptions(question) {
             const reveal = shouldRevealAnswer(question);
             const locked = isSelectionLocked(question);
+            const selectedAnswer = getQuestionUserAnswer(question) || '';
 
             if (question.type === QUESTION_TYPES.JUDGE) {
                 dom.judgmentContainer.hidden = false;
                 dom.judgmentButtons.forEach(function (button) {
                     const value = button.dataset.value;
-                    button.classList.toggle('selected', question.userAnswer === value);
+                    button.classList.toggle('selected', selectedAnswer === value);
                     button.classList.toggle('correct', reveal && question.answer === value);
-                    button.classList.toggle('incorrect', reveal && question.userAnswer === value && question.answer !== value);
+                    button.classList.toggle('incorrect', reveal && selectedAnswer === value && question.answer !== value);
                     button.disabled = locked;
                     button.onclick = function () {
                         selectAnswer(value);
@@ -1328,11 +1411,11 @@
                 return;
             }
 
-            question.options.forEach(function (option) {
+            getRenderOptions(question).forEach(function (option) {
                 const optionElement = document.createElement('button');
                 optionElement.type = 'button';
                 optionElement.className = 'option';
-                const selected = question.userAnswer && question.userAnswer.includes(option.letter);
+                const selected = selectedAnswer && selectedAnswer.includes(option.letter);
                 const correct = question.answer && question.answer.includes(option.letter);
                 optionElement.classList.toggle('selected', Boolean(selected));
                 optionElement.classList.toggle('correct', reveal && correct);
@@ -1352,7 +1435,7 @@
 
         function renderAnswerDisplay(question) {
             const reveal = shouldRevealAnswer(question);
-            const userAnswer = question && question.userAnswer ? question.userAnswer : '未作答';
+            const userAnswer = question && getQuestionUserAnswer(question) ? getQuestionUserAnswer(question) : '未作答';
             dom.userAnswerText.textContent = userAnswer;
             dom.correctAnswerText.textContent = question && reveal ? question.answer : getHiddenAnswerText();
             dom.correctAnswerText.classList.toggle('muted-value', !reveal);
@@ -1363,6 +1446,7 @@
                 dom.explanationBlock.hidden = true;
                 dom.answerNote.textContent = '暂无题目。';
                 dom.wrongBookBtn.disabled = true;
+                dom.retryQuestionBtn.hidden = true;
                 return;
             }
 
@@ -1370,6 +1454,9 @@
             dom.answerStatus.className = 'answer-value status-text status-' + getStatusClass(question);
             dom.answerNote.textContent = getAnswerNote(question);
             dom.wrongBookBtn.disabled = state.mode === MODES.EXAM && !state.exam.submitted;
+            dom.retryQuestionBtn.hidden = state.mode === MODES.EXAM ||
+                !isResultStatus(question.status) ||
+                isQuestionRetrying(question);
             updateWrongBookButton(question);
 
             if (reveal && question.explanation) {
@@ -1396,12 +1483,18 @@
                 }
                 return question.userAnswer ? '已作答' : '未作答';
             }
+            if (isQuestionRetrying(question)) {
+                return getQuestionUserAnswer(question) ? '已作答' : '未作答';
+            }
             return STATUS_LABELS[question.status] || '未作答';
         }
 
         function getStatusClass(question) {
             if (state.mode === MODES.EXAM && state.exam && !state.exam.submitted) {
                 return question.userAnswer ? STATUS.ANSWERING : STATUS.UNANSWERED;
+            }
+            if (isQuestionRetrying(question)) {
+                return getQuestionUserAnswer(question) ? STATUS.ANSWERING : STATUS.UNANSWERED;
             }
             return question.status || STATUS.UNANSWERED;
         }
@@ -1415,6 +1508,9 @@
                     return '保命题共有 3 次机会，第 ' + state.exam.lifeAttempt + ' 次作答中；提交阶段前不会显示正确答案。';
                 }
                 return '非保命题只有 1 次机会，交卷后统一发布成绩和解析。';
+            }
+            if (isQuestionRetrying(question)) {
+                return '正在重新答题，提交前不显示上次答案。';
             }
             if (question.status === STATUS.CORRECT || question.status === STATUS.INCORRECT) {
                 return '本题已提交，可查看答案与解析。';
@@ -1434,11 +1530,13 @@
             const questions = state.currentQuestions;
             const revealScores = state.mode !== MODES.EXAM || (state.exam && state.exam.submitted);
             const answered = questions.filter(function (question) {
-                return Boolean(question.userAnswer);
+                return Boolean(getQuestionUserAnswer(question));
             }).length;
-            const correct = revealScores ? questions.filter(isAnswerCorrect).length : 0;
+            const correct = revealScores ? questions.filter(function (question) {
+                return !isQuestionRetrying(question) && question.status === STATUS.CORRECT;
+            }).length : 0;
             const incorrect = revealScores ? questions.filter(function (question) {
-                return question.userAnswer && !isAnswerCorrect(question);
+                return !isQuestionRetrying(question) && question.status === STATUS.INCORRECT;
             }).length : 0;
             const progress = questions.length ? Math.round((answered / questions.length) * 100) : 0;
 
@@ -1469,7 +1567,7 @@
             }
 
             return state.currentQuestions.filter(function (question) {
-                return question.status === STATUS.CORRECT;
+                return !isQuestionRetrying(question) && question.status === STATUS.CORRECT;
             }).length;
         }
 
@@ -1485,10 +1583,12 @@
                     return question.type === type;
                 });
                 const answered = typeQuestions.filter(function (question) {
-                    return Boolean(question.userAnswer);
+                    return Boolean(getQuestionUserAnswer(question));
                 }).length;
                 const correct = revealScores
-                    ? typeQuestions.filter(isAnswerCorrect).length
+                    ? typeQuestions.filter(function (question) {
+                        return !isQuestionRetrying(question) && question.status === STATUS.CORRECT;
+                    }).length
                     : '--';
                 targets[type].textContent = '总 ' + typeQuestions.length + ' | 已答 ' + answered + ' | 正确 ' + correct;
             });
@@ -1577,10 +1677,13 @@
             if (state.mode === MODES.EXAM && state.exam && !state.exam.submitted) {
                 return question.userAnswer ? STATUS.ANSWERING : STATUS.UNANSWERED;
             }
+            if (isQuestionRetrying(question)) {
+                return getQuestionUserAnswer(question) ? STATUS.ANSWERING : STATUS.UNANSWERED;
+            }
             if (question.status === STATUS.CORRECT || question.status === STATUS.INCORRECT) {
                 return question.status;
             }
-            return question.userAnswer ? STATUS.ANSWERING : STATUS.UNANSWERED;
+            return getQuestionUserAnswer(question) ? STATUS.ANSWERING : STATUS.UNANSWERED;
         }
 
         function renderExamControls() {
@@ -1652,6 +1755,7 @@
             });
             dom.questionSubmitBtn.addEventListener('click', submitCurrentQuestion);
             dom.stageSubmitBtn.addEventListener('click', submitExamStage);
+            dom.retryQuestionBtn.addEventListener('click', retryCurrentQuestion);
             dom.wrongBookBtn.addEventListener('click', toggleWrongBook);
             dom.startExamBtn.addEventListener('click', startNewExam);
             dom.resetPageBtn.addEventListener('click', resetPageProgress);
@@ -1670,6 +1774,11 @@
             dom.lifeFilterBtn.addEventListener('click', function () {
                 state.filters.lifeOnly = !state.filters.lifeOnly;
                 applyPracticeFilters();
+            });
+            dom.optionShuffleBtn.addEventListener('click', function () {
+                state.optionShuffle = !state.optionShuffle;
+                savePracticeProgress();
+                render();
             });
             dom.clearFiltersBtn.addEventListener('click', clearPracticeFilters);
             dom.backToPracticeBtn.addEventListener('click', function () {
