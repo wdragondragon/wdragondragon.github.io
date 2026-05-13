@@ -133,7 +133,7 @@ code {
 
 .practice-tools {
     display: grid;
-    grid-template-columns: minmax(220px, 1fr) auto auto auto;
+    grid-template-columns: minmax(220px, 1fr) minmax(132px, auto) minmax(132px, auto) auto auto auto;
     align-items: center;
     gap: 10px;
     padding: 12px;
@@ -176,6 +176,37 @@ code {
 
 .search-field input::placeholder {
     color: rgba(95, 114, 135, 0.78);
+}
+
+.filter-select {
+    min-height: 44px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 0 12px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    background: var(--surface-soft);
+    color: var(--text-subtle);
+    font-size: 13px;
+    font-weight: 800;
+    white-space: nowrap;
+}
+
+.filter-select select {
+    min-width: 76px;
+    border: 0;
+    outline: none;
+    background: transparent;
+    color: var(--text-main);
+    cursor: pointer;
+    font: inherit;
+}
+
+.filter-select:focus-within {
+    border-color: rgba(31, 122, 224, 0.62);
+    background: #fff;
+    box-shadow: 0 0 0 3px rgba(31, 122, 224, 0.1);
 }
 
 .filter-toggle,
@@ -1000,6 +1031,15 @@ code {
 
     .practice-tools {
         grid-template-columns: 1fr;
+    }
+
+    .filter-select {
+        width: 100%;
+        justify-content: space-between;
+    }
+
+    .filter-select select {
+        min-width: 120px;
     }
 
     .filter-toggle,

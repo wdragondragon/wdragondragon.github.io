@@ -276,6 +276,8 @@
             modeButtons: Array.from(document.querySelectorAll('.mode-btn')),
             practiceTools: document.getElementById('practiceTools'),
             questionSearchInput: document.getElementById('questionSearchInput'),
+            difficultyFilterSelect: document.getElementById('difficultyFilterSelect'),
+            typeFilterSelect: document.getElementById('typeFilterSelect'),
             lifeFilterBtn: document.getElementById('lifeFilterBtn'),
             clearFiltersBtn: document.getElementById('clearFiltersBtn'),
             filterSummary: document.getElementById('filterSummary'),
@@ -337,12 +339,15 @@
             randomOrder: [],
             filters: {
                 lifeOnly: false,
-                query: ''
+                query: '',
+                difficulty: '',
+                type: ''
             },
             currentQuestions: [],
             currentIndex: 0,
             exam: null,
-            timerId: null
+            timerId: null,
+            activeQuestionKey: null
         };
 
         state.sourceQuestions.forEach(function (question) {
@@ -421,6 +426,38 @@
             return state.currentQuestions[state.currentIndex] || null;
         }
 
+        function getCurrentQuestionKey(question) {
+            if (!question) {
+                return '';
+            }
+            return state.mode + ':' + (question.originalId || question.id);
+        }
+
+        function isResultStatus(status) {
+            return status === STATUS.CORRECT || status === STATUS.INCORRECT;
+        }
+
+        function resetQuestionForRepeat(question) {
+            if (state.mode === MODES.EXAM || !question || !isResultStatus(question.status)) {
+                return;
+            }
+            question.userAnswer = null;
+            question.status = STATUS.UNANSWERED;
+            savePracticeProgress();
+        }
+
+        function prepareQuestionForRepeat(question) {
+            if (state.mode === MODES.EXAM) {
+                return;
+            }
+            const questionKey = getCurrentQuestionKey(question);
+            const isNewQuestion = questionKey !== state.activeQuestionKey;
+            state.activeQuestionKey = questionKey;
+            if (isNewQuestion) {
+                resetQuestionForRepeat(question);
+            }
+        }
+
         function normalizeSearchValue(value) {
             return String(value || '').replace(/\s+/g, ' ').trim().toLowerCase();
         }
@@ -452,6 +489,12 @@
             if (state.filters.lifeOnly && !question.isLifeSaving) {
                 return false;
             }
+            if (state.filters.difficulty && question.difficulty !== state.filters.difficulty) {
+                return false;
+            }
+            if (state.filters.type && question.type !== state.filters.type) {
+                return false;
+            }
             return matchesSearchQuery(question);
         }
 
@@ -460,7 +503,10 @@
         }
 
         function hasActiveFilters() {
-            return state.filters.lifeOnly || Boolean(normalizeSearchValue(state.filters.query));
+            return state.filters.lifeOnly ||
+                Boolean(normalizeSearchValue(state.filters.query)) ||
+                Boolean(state.filters.difficulty) ||
+                Boolean(state.filters.type);
         }
 
         function resetCurrentPracticeIndex() {
@@ -702,6 +748,7 @@
             }
             saveCurrentIndex();
             state.mode = mode;
+            state.activeQuestionKey = null;
             if (mode === MODES.EXAM && state.exam && state.exam.active) {
                 startTimer();
             }
@@ -712,15 +759,46 @@
 
         function applyPracticeFilters() {
             resetCurrentPracticeIndex();
+            state.activeQuestionKey = null;
             syncCurrentQuestions();
             render();
+        }
+
+        function populateDifficultyFilter() {
+            const values = Array.from(new Set(state.sourceQuestions.map(function (question) {
+                return question.difficulty;
+            }).filter(Boolean)));
+            const preferredOrder = ['易', '适中', '难'];
+            values.sort(function (left, right) {
+                const leftIndex = preferredOrder.indexOf(left);
+                const rightIndex = preferredOrder.indexOf(right);
+                if (leftIndex !== -1 || rightIndex !== -1) {
+                    return (leftIndex === -1 ? Number.MAX_SAFE_INTEGER : leftIndex) -
+                        (rightIndex === -1 ? Number.MAX_SAFE_INTEGER : rightIndex);
+                }
+                return left.localeCompare(right, 'zh-CN');
+            });
+            values.forEach(function (value) {
+                const option = document.createElement('option');
+                option.value = value;
+                option.textContent = value;
+                dom.difficultyFilterSelect.appendChild(option);
+            });
         }
 
         function clearPracticeFilters() {
             state.filters.lifeOnly = false;
             state.filters.query = '';
+            state.filters.difficulty = '';
+            state.filters.type = '';
             if (dom.questionSearchInput) {
                 dom.questionSearchInput.value = '';
+            }
+            if (dom.difficultyFilterSelect) {
+                dom.difficultyFilterSelect.value = '';
+            }
+            if (dom.typeFilterSelect) {
+                dom.typeFilterSelect.value = '';
             }
             applyPracticeFilters();
         }
@@ -757,7 +835,7 @@
             if (state.mode === MODES.EXAM) {
                 return !state.exam || state.exam.submitted || question.locked;
             }
-            return question.status === STATUS.CORRECT || question.status === STATUS.INCORRECT;
+            return false;
         }
 
         function submitCurrentQuestion() {
@@ -1004,6 +1082,7 @@
 
         function navigateTo(index) {
             state.currentIndex = clamp(index, 0, state.currentQuestions.length - 1);
+            state.activeQuestionKey = null;
             saveCurrentIndex();
             render();
         }
@@ -1050,12 +1129,21 @@
                 [MODES.EXAM]: 0
             };
             state.randomOrder = [];
+            state.activeQuestionKey = null;
             state.filters = {
                 lifeOnly: false,
-                query: ''
+                query: '',
+                difficulty: '',
+                type: ''
             };
             if (dom.questionSearchInput) {
                 dom.questionSearchInput.value = '';
+            }
+            if (dom.difficultyFilterSelect) {
+                dom.difficultyFilterSelect.value = '';
+            }
+            if (dom.typeFilterSelect) {
+                dom.typeFilterSelect.value = '';
             }
             state.exam = null;
             syncCurrentQuestions();
@@ -1098,6 +1186,12 @@
             if (dom.questionSearchInput && dom.questionSearchInput.value !== state.filters.query) {
                 dom.questionSearchInput.value = state.filters.query;
             }
+            if (dom.difficultyFilterSelect && dom.difficultyFilterSelect.value !== state.filters.difficulty) {
+                dom.difficultyFilterSelect.value = state.filters.difficulty;
+            }
+            if (dom.typeFilterSelect && dom.typeFilterSelect.value !== state.filters.type) {
+                dom.typeFilterSelect.value = state.filters.type;
+            }
             dom.lifeFilterBtn.classList.toggle('active', state.filters.lifeOnly);
             dom.lifeFilterBtn.setAttribute('aria-pressed', state.filters.lifeOnly ? 'true' : 'false');
             dom.clearFiltersBtn.hidden = !hasActiveFilters();
@@ -1124,6 +1218,7 @@
         function renderQuestion() {
             const question = getCurrentQuestion();
             const hasQuestion = Boolean(question);
+            prepareQuestionForRepeat(question);
 
             dom.emptyState.hidden = hasQuestion;
             dom.optionsContainer.innerHTML = '';
@@ -1564,6 +1659,14 @@
                 state.filters.query = dom.questionSearchInput.value;
                 applyPracticeFilters();
             });
+            dom.difficultyFilterSelect.addEventListener('change', function () {
+                state.filters.difficulty = dom.difficultyFilterSelect.value;
+                applyPracticeFilters();
+            });
+            dom.typeFilterSelect.addEventListener('change', function () {
+                state.filters.type = dom.typeFilterSelect.value;
+                applyPracticeFilters();
+            });
             dom.lifeFilterBtn.addEventListener('click', function () {
                 state.filters.lifeOnly = !state.filters.lifeOnly;
                 applyPracticeFilters();
@@ -1611,6 +1714,7 @@
             } else if (state.exam && state.exam.active && !state.exam.submitted) {
                 state.mode = MODES.EXAM;
             }
+            populateDifficultyFilter();
             initEventListeners();
             syncCurrentQuestions();
             if (state.exam && state.exam.active && !state.exam.submitted) {
