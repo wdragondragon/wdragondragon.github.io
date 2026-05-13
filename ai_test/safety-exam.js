@@ -274,6 +274,11 @@
             headerDescription: document.getElementById('headerDescription'),
             modeStrip: document.getElementById('modeStrip'),
             modeButtons: Array.from(document.querySelectorAll('.mode-btn')),
+            practiceTools: document.getElementById('practiceTools'),
+            questionSearchInput: document.getElementById('questionSearchInput'),
+            lifeFilterBtn: document.getElementById('lifeFilterBtn'),
+            clearFiltersBtn: document.getElementById('clearFiltersBtn'),
+            filterSummary: document.getElementById('filterSummary'),
             questionText: document.getElementById('questionText'),
             questionType: document.getElementById('questionType'),
             questionNumber: document.getElementById('questionNumber'),
@@ -330,6 +335,10 @@
                 [MODES.EXAM]: 0
             },
             randomOrder: [],
+            filters: {
+                lifeOnly: false,
+                query: ''
+            },
             currentQuestions: [],
             currentIndex: 0,
             exam: null,
@@ -358,6 +367,7 @@
                 dom.pageTitle.innerHTML = '<i class="fas fa-file-signature"></i> 安规正式考试';
                 dom.headerDescription.textContent = '按真实规则抽取保命题和非保命题，全流程 60 分钟，交卷后即时发布成绩。';
                 dom.modeStrip.hidden = true;
+                dom.practiceTools.hidden = true;
                 dom.startExamBtn.hidden = false;
                 return;
             }
@@ -365,7 +375,7 @@
             if (pageView === PAGE_VIEWS.PRACTICE) {
                 document.title = '安规练习';
                 dom.pageTitle.innerHTML = '<i class="fas fa-shield-halved"></i> 安规练习';
-                dom.headerDescription.textContent = '使用信息网络安规 Excel 题库，支持顺序练习、随机刷题和错题复习。';
+                dom.headerDescription.textContent = '使用信息网络安规 Excel 题库，支持顺序练习、随机刷题、错题复习、保命题筛选和题目搜索。';
                 dom.startExamBtn.hidden = true;
                 dom.modeButtons.forEach(function (button) {
                     button.hidden = button.dataset.mode === MODES.EXAM;
@@ -409,6 +419,56 @@
 
         function getCurrentQuestion() {
             return state.currentQuestions[state.currentIndex] || null;
+        }
+
+        function normalizeSearchValue(value) {
+            return String(value || '').replace(/\s+/g, ' ').trim().toLowerCase();
+        }
+
+        function getQuestionSearchText(question) {
+            const optionText = (question.options || []).map(function (option) {
+                return option.text;
+            }).join(' ');
+            return normalizeSearchValue([
+                question.caseStem,
+                question.question,
+                optionText
+            ].join(' '));
+        }
+
+        function matchesSearchQuery(question) {
+            const query = normalizeSearchValue(state.filters.query);
+            if (!query) {
+                return true;
+            }
+            const terms = query.split(' ').filter(Boolean);
+            const searchText = getQuestionSearchText(question);
+            return terms.every(function (term) {
+                return searchText.includes(term);
+            });
+        }
+
+        function matchesPracticeFilters(question) {
+            if (state.filters.lifeOnly && !question.isLifeSaving) {
+                return false;
+            }
+            return matchesSearchQuery(question);
+        }
+
+        function filterPracticeQuestions(questions) {
+            return questions.filter(matchesPracticeFilters);
+        }
+
+        function hasActiveFilters() {
+            return state.filters.lifeOnly || Boolean(normalizeSearchValue(state.filters.query));
+        }
+
+        function resetCurrentPracticeIndex() {
+            if (state.mode === MODES.EXAM) {
+                return;
+            }
+            state.modeIndexes[state.mode] = 0;
+            state.currentIndex = 0;
         }
 
         function savePracticeProgress() {
@@ -574,7 +634,7 @@
 
         function syncCurrentQuestions() {
             if (state.mode === MODES.PRACTICE) {
-                state.currentQuestions = state.sourceQuestions;
+                state.currentQuestions = filterPracticeQuestions(state.sourceQuestions);
                 state.currentIndex = clamp(state.modeIndexes[MODES.PRACTICE], 0, state.currentQuestions.length - 1);
                 return;
             }
@@ -585,7 +645,8 @@
                     .map(function (id) {
                         return state.sourceById.get(id);
                     })
-                    .filter(Boolean);
+                    .filter(Boolean)
+                    .filter(matchesPracticeFilters);
                 state.currentIndex = clamp(state.modeIndexes[MODES.RANDOM], 0, state.currentQuestions.length - 1);
                 return;
             }
@@ -593,7 +654,7 @@
             if (state.mode === MODES.WRONG) {
                 state.currentQuestions = state.sourceQuestions.filter(function (question) {
                     return question.isWrongBook;
-                });
+                }).filter(matchesPracticeFilters);
                 state.currentIndex = clamp(state.modeIndexes[MODES.WRONG], 0, state.currentQuestions.length - 1);
                 return;
             }
@@ -647,6 +708,21 @@
             syncCurrentQuestions();
             render();
             savePracticeProgress();
+        }
+
+        function applyPracticeFilters() {
+            resetCurrentPracticeIndex();
+            syncCurrentQuestions();
+            render();
+        }
+
+        function clearPracticeFilters() {
+            state.filters.lifeOnly = false;
+            state.filters.query = '';
+            if (dom.questionSearchInput) {
+                dom.questionSearchInput.value = '';
+            }
+            applyPracticeFilters();
         }
 
         function selectAnswer(answer) {
@@ -974,6 +1050,13 @@
                 [MODES.EXAM]: 0
             };
             state.randomOrder = [];
+            state.filters = {
+                lifeOnly: false,
+                query: ''
+            };
+            if (dom.questionSearchInput) {
+                dom.questionSearchInput.value = '';
+            }
             state.exam = null;
             syncCurrentQuestions();
             render();
@@ -992,6 +1075,7 @@
 
         function render() {
             updateModeButtons();
+            renderPracticeTools();
             renderQuestion();
             renderStats();
             renderAnswerSheet();
@@ -1002,6 +1086,39 @@
             dom.modeButtons.forEach(function (button) {
                 button.classList.toggle('active', button.dataset.mode === state.mode);
             });
+        }
+
+        function renderPracticeTools() {
+            const enabled = state.mode !== MODES.EXAM && pageView !== PAGE_VIEWS.EXAM;
+            dom.practiceTools.hidden = !enabled;
+            if (!enabled) {
+                return;
+            }
+
+            if (dom.questionSearchInput && dom.questionSearchInput.value !== state.filters.query) {
+                dom.questionSearchInput.value = state.filters.query;
+            }
+            dom.lifeFilterBtn.classList.toggle('active', state.filters.lifeOnly);
+            dom.lifeFilterBtn.setAttribute('aria-pressed', state.filters.lifeOnly ? 'true' : 'false');
+            dom.clearFiltersBtn.hidden = !hasActiveFilters();
+            dom.filterSummary.textContent = getFilterSummaryText();
+        }
+
+        function getFilterSummaryText() {
+            const baseCount = getFilterBaseCount();
+            if (!hasActiveFilters()) {
+                return '共 ' + baseCount + ' 题';
+            }
+            return '筛选出 ' + state.currentQuestions.length + ' / ' + baseCount + ' 题';
+        }
+
+        function getFilterBaseCount() {
+            if (state.mode === MODES.WRONG) {
+                return state.sourceQuestions.filter(function (question) {
+                    return question.isWrongBook;
+                }).length;
+            }
+            return state.sourceQuestions.length;
         }
 
         function renderQuestion() {
@@ -1021,9 +1138,7 @@
                 dom.questionNumber.textContent = '第 0 题 / 共 0 题';
                 dom.stageChip.textContent = MODE_LABELS[state.mode];
                 dom.caseBlock.hidden = true;
-                dom.emptyState.textContent = state.mode === MODES.WRONG
-                    ? '错题集为空。练习或考试中的错题会自动进入这里。'
-                    : '暂无可显示的题目。';
+                dom.emptyState.textContent = getEmptyStateText();
                 renderAnswerDisplay(null);
                 return;
             }
@@ -1055,6 +1170,16 @@
                 return stageLabel + '第 ' + (state.currentIndex + 1) + ' 题 / 共 ' + state.currentQuestions.length + ' 题';
             }
             return '题库第 ' + question.id + ' 题 · 第 ' + (state.currentIndex + 1) + ' 题 / 共 ' + state.currentQuestions.length + ' 题';
+        }
+
+        function getEmptyStateText() {
+            if (hasActiveFilters()) {
+                return '没有匹配当前筛选条件的题目。';
+            }
+            if (state.mode === MODES.WRONG) {
+                return '错题集为空。练习或考试中的错题会自动进入这里。';
+            }
+            return '暂无可显示的题目。';
         }
 
         function getStageText() {
@@ -1435,6 +1560,15 @@
             dom.wrongBookBtn.addEventListener('click', toggleWrongBook);
             dom.startExamBtn.addEventListener('click', startNewExam);
             dom.resetPageBtn.addEventListener('click', resetPageProgress);
+            dom.questionSearchInput.addEventListener('input', function () {
+                state.filters.query = dom.questionSearchInput.value;
+                applyPracticeFilters();
+            });
+            dom.lifeFilterBtn.addEventListener('click', function () {
+                state.filters.lifeOnly = !state.filters.lifeOnly;
+                applyPracticeFilters();
+            });
+            dom.clearFiltersBtn.addEventListener('click', clearPracticeFilters);
             dom.backToPracticeBtn.addEventListener('click', function () {
                 window.location.href = 'portal.html';
             });

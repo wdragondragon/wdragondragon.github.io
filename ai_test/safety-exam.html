@@ -48,6 +48,20 @@
                         </button>
                     </section>
 
+                    <section id="practiceTools" class="practice-tools" aria-label="题目筛选">
+                        <label class="search-field" for="questionSearchInput">
+                            <i class="fas fa-magnifying-glass" aria-hidden="true"></i>
+                            <input id="questionSearchInput" type="search" placeholder="搜索题干、选项" autocomplete="off">
+                        </label>
+                        <button id="lifeFilterBtn" class="filter-toggle" type="button" aria-pressed="false">
+                            <i class="fas fa-shield-halved"></i> 保命题
+                        </button>
+                        <button id="clearFiltersBtn" class="filter-clear" type="button" hidden>
+                            <i class="fas fa-xmark"></i> 清空筛选
+                        </button>
+                        <span id="filterSummary" class="filter-summary">共 474 题</span>
+                    </section>
+
                     <div class="question-shell">
                         <div class="question-meta">
                             <div class="question-meta-left">
