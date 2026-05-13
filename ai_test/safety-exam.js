@@ -325,7 +325,6 @@
             nextBtn: document.getElementById('nextBtn'),
             questionSubmitBtn: document.getElementById('questionSubmitBtn'),
             stageSubmitBtn: document.getElementById('stageSubmitBtn'),
-            retryQuestionBtn: document.getElementById('retryQuestionBtn'),
             wrongBookBtn: document.getElementById('wrongBookBtn'),
             startExamBtn: document.getElementById('startExamBtn'),
             resetPageBtn: document.getElementById('resetPageBtn'),
@@ -376,7 +375,8 @@
             currentIndex: 0,
             exam: null,
             timerId: null,
-            optionShuffle: false
+            optionShuffle: false,
+            visibleResultKey: null
         };
 
         state.sourceQuestions.forEach(function (question) {
@@ -459,8 +459,34 @@
             return status === STATUS.CORRECT || status === STATUS.INCORRECT;
         }
 
+        function getQuestionKey(question) {
+            if (!question) {
+                return '';
+            }
+            return state.mode + ':' + (question.originalId || question.id);
+        }
+
         function isQuestionRetrying(question) {
             return state.mode !== MODES.EXAM && Boolean(question && question.retrying);
+        }
+
+        function isQuestionResultVisible(question) {
+            return state.mode !== MODES.EXAM &&
+                Boolean(question) &&
+                isResultStatus(question.status) &&
+                state.visibleResultKey === getQuestionKey(question);
+        }
+
+        function isCommittedAnswerHidden(question) {
+            return state.mode !== MODES.EXAM &&
+                Boolean(question) &&
+                isResultStatus(question.status) &&
+                !isQuestionRetrying(question) &&
+                !isQuestionResultVisible(question);
+        }
+
+        function hideVisibleResult() {
+            state.visibleResultKey = null;
         }
 
         function beginRetryQuestion(question) {
@@ -485,6 +511,13 @@
                 return null;
             }
             return isQuestionRetrying(question) ? question.draftAnswer : question.userAnswer;
+        }
+
+        function getDisplayUserAnswer(question) {
+            if (isCommittedAnswerHidden(question)) {
+                return null;
+            }
+            return getQuestionUserAnswer(question);
         }
 
         function setQuestionUserAnswer(question, answer) {
@@ -789,6 +822,7 @@
             if (!MODE_LABELS[mode] || !canUseMode(mode)) {
                 return;
             }
+            hideVisibleResult();
             saveCurrentIndex();
             state.mode = mode;
             if (mode === MODES.EXAM && state.exam && state.exam.active) {
@@ -800,6 +834,7 @@
         }
 
         function applyPracticeFilters() {
+            hideVisibleResult();
             resetCurrentPracticeIndex();
             syncCurrentQuestions();
             render();
@@ -852,6 +887,7 @@
 
             if (state.mode !== MODES.EXAM && isResultStatus(question.status) && !isQuestionRetrying(question)) {
                 beginRetryQuestion(question);
+                hideVisibleResult();
             }
 
             let nextAnswer;
@@ -913,20 +949,13 @@
             }
             const correct = isAnswerCorrect(question);
             question.status = correct ? STATUS.CORRECT : STATUS.INCORRECT;
+            state.visibleResultKey = getQuestionKey(question);
             if (!correct) {
                 question.isWrongBook = true;
             }
             savePracticeProgress();
             render();
             showToast(correct ? '回答正确' : '回答错误，已加入错题集', correct ? 'success' : 'error');
-        }
-
-        function retryCurrentQuestion() {
-            const question = getCurrentQuestion();
-            if (!beginRetryQuestion(question)) {
-                return;
-            }
-            render();
         }
 
         function submitExamStage() {
@@ -1133,12 +1162,14 @@
             if (!state.currentQuestions.length) {
                 return;
             }
+            hideVisibleResult();
             state.currentIndex = clamp(state.currentIndex + delta, 0, state.currentQuestions.length - 1);
             saveCurrentIndex();
             render();
         }
 
         function navigateTo(index) {
+            hideVisibleResult();
             state.currentIndex = clamp(index, 0, state.currentQuestions.length - 1);
             saveCurrentIndex();
             render();
@@ -1189,6 +1220,7 @@
             };
             state.randomOrder = [];
             state.optionShuffle = false;
+            state.visibleResultKey = null;
             state.filters = {
                 lifeOnly: false,
                 query: '',
@@ -1220,7 +1252,7 @@
             if (state.mode === MODES.EXAM) {
                 return Boolean(state.exam && state.exam.submitted);
             }
-            return question.status === STATUS.CORRECT || question.status === STATUS.INCORRECT;
+            return isQuestionResultVisible(question);
         }
 
         function render() {
@@ -1394,7 +1426,7 @@
         function renderOptions(question) {
             const reveal = shouldRevealAnswer(question);
             const locked = isSelectionLocked(question);
-            const selectedAnswer = getQuestionUserAnswer(question) || '';
+            const selectedAnswer = getDisplayUserAnswer(question) || '';
 
             if (question.type === QUESTION_TYPES.JUDGE) {
                 dom.judgmentContainer.hidden = false;
@@ -1435,7 +1467,8 @@
 
         function renderAnswerDisplay(question) {
             const reveal = shouldRevealAnswer(question);
-            const userAnswer = question && getQuestionUserAnswer(question) ? getQuestionUserAnswer(question) : '未作答';
+            const displayAnswer = question && getDisplayUserAnswer(question);
+            const userAnswer = displayAnswer || (isCommittedAnswerHidden(question) ? '已作答' : '未作答');
             dom.userAnswerText.textContent = userAnswer;
             dom.correctAnswerText.textContent = question && reveal ? question.answer : getHiddenAnswerText();
             dom.correctAnswerText.classList.toggle('muted-value', !reveal);
@@ -1446,7 +1479,6 @@
                 dom.explanationBlock.hidden = true;
                 dom.answerNote.textContent = '暂无题目。';
                 dom.wrongBookBtn.disabled = true;
-                dom.retryQuestionBtn.hidden = true;
                 return;
             }
 
@@ -1454,9 +1486,6 @@
             dom.answerStatus.className = 'answer-value status-text status-' + getStatusClass(question);
             dom.answerNote.textContent = getAnswerNote(question);
             dom.wrongBookBtn.disabled = state.mode === MODES.EXAM && !state.exam.submitted;
-            dom.retryQuestionBtn.hidden = state.mode === MODES.EXAM ||
-                !isResultStatus(question.status) ||
-                isQuestionRetrying(question);
             updateWrongBookButton(question);
 
             if (reveal && question.explanation) {
@@ -1486,6 +1515,9 @@
             if (isQuestionRetrying(question)) {
                 return getQuestionUserAnswer(question) ? '已作答' : '未作答';
             }
+            if (isCommittedAnswerHidden(question)) {
+                return '已作答';
+            }
             return STATUS_LABELS[question.status] || '未作答';
         }
 
@@ -1495,6 +1527,9 @@
             }
             if (isQuestionRetrying(question)) {
                 return getQuestionUserAnswer(question) ? STATUS.ANSWERING : STATUS.UNANSWERED;
+            }
+            if (isCommittedAnswerHidden(question)) {
+                return STATUS.ANSWERING;
             }
             return question.status || STATUS.UNANSWERED;
         }
@@ -1511,6 +1546,9 @@
             }
             if (isQuestionRetrying(question)) {
                 return '正在重新答题，提交前不显示上次答案。';
+            }
+            if (isCommittedAnswerHidden(question)) {
+                return '此题已有作答记录，选择任一选项将重新作答。';
             }
             if (question.status === STATUS.CORRECT || question.status === STATUS.INCORRECT) {
                 return '本题已提交，可查看答案与解析。';
@@ -1670,7 +1708,7 @@
             });
             dom.sheetLegend.textContent = state.mode === MODES.EXAM && state.exam && !state.exam.submitted
                 ? '蓝色表示已作答，交卷后显示对错。'
-                : '绿色正确，红色错误，蓝色为当前题。';
+                : '提交后当前题显示对错，切换后蓝色表示已作答。';
         }
 
         function getSheetStatus(question) {
@@ -1681,7 +1719,7 @@
                 return getQuestionUserAnswer(question) ? STATUS.ANSWERING : STATUS.UNANSWERED;
             }
             if (question.status === STATUS.CORRECT || question.status === STATUS.INCORRECT) {
-                return question.status;
+                return isQuestionResultVisible(question) ? question.status : STATUS.ANSWERING;
             }
             return getQuestionUserAnswer(question) ? STATUS.ANSWERING : STATUS.UNANSWERED;
         }
@@ -1755,7 +1793,6 @@
             });
             dom.questionSubmitBtn.addEventListener('click', submitCurrentQuestion);
             dom.stageSubmitBtn.addEventListener('click', submitExamStage);
-            dom.retryQuestionBtn.addEventListener('click', retryCurrentQuestion);
             dom.wrongBookBtn.addEventListener('click', toggleWrongBook);
             dom.startExamBtn.addEventListener('click', startNewExam);
             dom.resetPageBtn.addEventListener('click', resetPageProgress);
