@@ -312,6 +312,7 @@
             difficultyFilterSelect: document.getElementById('difficultyFilterSelect'),
             typeFilterSelect: document.getElementById('typeFilterSelect'),
             optionShuffleBtn: document.getElementById('optionShuffleBtn'),
+            hideAnswerOnSwitchBtn: document.getElementById('hideAnswerOnSwitchBtn'),
             unattemptedFilterBtn: document.getElementById('unattemptedFilterBtn'),
             clearFiltersBtn: document.getElementById('clearFiltersBtn'),
             filterSummary: document.getElementById('filterSummary'),
@@ -384,6 +385,7 @@
             exam: null,
             timerId: null,
             optionShuffle: false,
+            hideAnswerOnSwitch: true,
             visibleResultKey: null
         };
 
@@ -483,7 +485,7 @@
             return state.mode !== MODES.EXAM &&
                 Boolean(question) &&
                 isResultStatus(question.status) &&
-                state.visibleResultKey === getQuestionKey(question);
+                (!state.hideAnswerOnSwitch || state.visibleResultKey === getQuestionKey(question));
         }
 
         function isCommittedAnswerHidden(question) {
@@ -705,6 +707,7 @@
                 modeIndexes: state.modeIndexes,
                 randomOrder: state.randomOrder,
                 optionShuffle: state.optionShuffle,
+                hideAnswerOnSwitch: state.hideAnswerOnSwitch,
                 questions: state.sourceQuestions
                     .filter(function (question) {
                         return question.userAnswer || question.status !== STATUS.UNANSWERED || question.isWrongBook;
@@ -740,6 +743,9 @@
                     });
                 }
                 state.optionShuffle = Boolean(saved.optionShuffle);
+                if (typeof saved.hideAnswerOnSwitch === 'boolean') {
+                    state.hideAnswerOnSwitch = saved.hideAnswerOnSwitch;
+                }
                 if (Array.isArray(saved.questions)) {
                     saved.questions.forEach(function (progress) {
                         const question = state.sourceById.get(progress.id);
@@ -1330,6 +1336,7 @@
             };
             state.randomOrder = [];
             state.optionShuffle = false;
+            state.hideAnswerOnSwitch = true;
             state.visibleResultKey = null;
             state.filters = {
                 lifeScope: '',
@@ -1407,6 +1414,11 @@
             dom.unattemptedFilterBtn.setAttribute('aria-pressed', state.filters.unattemptedOnly ? 'true' : 'false');
             dom.optionShuffleBtn.classList.toggle('active', state.optionShuffle);
             dom.optionShuffleBtn.setAttribute('aria-pressed', state.optionShuffle ? 'true' : 'false');
+            dom.hideAnswerOnSwitchBtn.classList.toggle('active', state.hideAnswerOnSwitch);
+            dom.hideAnswerOnSwitchBtn.setAttribute('aria-pressed', state.hideAnswerOnSwitch ? 'true' : 'false');
+            dom.hideAnswerOnSwitchBtn.innerHTML = state.hideAnswerOnSwitch
+                ? '<i class="fas fa-eye-slash"></i> 切题隐藏答案'
+                : '<i class="fas fa-eye"></i> 切题显示答案';
             dom.clearFiltersBtn.hidden = !hasActiveFilters();
             dom.filterSummary.textContent = getFilterSummaryText();
         }
@@ -1829,7 +1841,9 @@
             });
             dom.sheetLegend.textContent = state.mode === MODES.EXAM && state.exam && !state.exam.submitted
                 ? '蓝色表示已作答，交卷后显示对错。'
-                : '提交后当前题显示对错，切换后蓝色表示已作答。';
+                : (state.hideAnswerOnSwitch
+                    ? '提交后当前题显示对错，切换后蓝色表示已作答。'
+                    : '提交后显示对错，切换题目也保留答案。');
         }
 
         function getSheetStatus(question) {
@@ -1937,6 +1951,11 @@
             });
             dom.optionShuffleBtn.addEventListener('click', function () {
                 state.optionShuffle = !state.optionShuffle;
+                savePracticeProgress();
+                render();
+            });
+            dom.hideAnswerOnSwitchBtn.addEventListener('click', function () {
+                state.hideAnswerOnSwitch = !state.hideAnswerOnSwitch;
                 savePracticeProgress();
                 render();
             });
