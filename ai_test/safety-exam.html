@@ -84,6 +84,24 @@
                         <span id="filterSummary" class="filter-summary">共 474 题</span>
                     </section>
 
+                    <section id="searchSection" class="search-section" aria-label="搜索安规题目">
+                        <div class="search-head">
+                            <div>
+                                <h3><i class="fas fa-magnifying-glass"></i> 搜索题目</h3>
+                                <p>支持题干、选项、答案、分类、关键词、案例背景和解析。</p>
+                            </div>
+                            <button id="clearSearchBtn" class="btn btn-secondary btn-small" type="button">
+                                <i class="fas fa-xmark"></i> 清空
+                            </button>
+                        </div>
+                        <div class="search-box">
+                            <i class="fas fa-magnifying-glass"></i>
+                            <input id="questionSearchInput" type="search" placeholder="输入关键词，例如：数据安全、外部人员、A、保命题" autocomplete="off">
+                        </div>
+                        <div id="searchSummary" class="search-summary">输入关键词后显示匹配题目。</div>
+                        <div id="searchResults" class="search-results"></div>
+                    </section>
+
                     <div class="question-shell">
                         <div class="question-meta">
                             <div class="question-meta-left">
@@ -94,11 +112,6 @@
                         </div>
 
                         <div id="resultBanner" class="result-banner" hidden></div>
-
-                        <label id="questionSearchField" class="search-field question-search-field" for="questionSearchInput">
-                            <i class="fas fa-magnifying-glass" aria-hidden="true"></i>
-                            <input id="questionSearchInput" type="search" placeholder="搜索题干、选项" autocomplete="off">
-                        </label>
 
                         <div id="caseBlock" class="case-block" hidden>
                             <div class="case-title"><i class="fas fa-file-lines"></i> 案例背景</div>

@@ -76,6 +76,7 @@
             [QUESTION_TYPES.JUDGE]: 18
         }
     };
+    const SEARCH_RESULT_LIMIT = 60;
 
     function normalizeAnswer(rawAnswer, type) {
         const value = String(rawAnswer || '').trim();
@@ -302,8 +303,11 @@
             modeStrip: document.getElementById('modeStrip'),
             modeButtons: Array.from(document.querySelectorAll('.mode-btn')),
             practiceTools: document.getElementById('practiceTools'),
-            questionSearchField: document.getElementById('questionSearchField'),
+            searchSection: document.getElementById('searchSection'),
             questionSearchInput: document.getElementById('questionSearchInput'),
+            clearSearchBtn: document.getElementById('clearSearchBtn'),
+            searchSummary: document.getElementById('searchSummary'),
+            searchResults: document.getElementById('searchResults'),
             lifeFilterSelect: document.getElementById('lifeFilterSelect'),
             difficultyFilterSelect: document.getElementById('difficultyFilterSelect'),
             typeFilterSelect: document.getElementById('typeFilterSelect'),
@@ -370,12 +374,13 @@
             filters: {
                 lifeScope: '',
                 unattemptedOnly: false,
-                query: '',
                 difficulty: '',
                 type: ''
             },
             currentQuestions: [],
             currentIndex: 0,
+            searchQuery: '',
+            searchResults: [],
             exam: null,
             timerId: null,
             optionShuffle: false,
@@ -405,6 +410,7 @@
                 dom.headerDescription.textContent = '按真实规则抽取保命题和非保命题，全流程 60 分钟，交卷后即时发布成绩。';
                 dom.modeStrip.hidden = true;
                 dom.practiceTools.hidden = true;
+                dom.searchSection.hidden = true;
                 dom.startExamBtn.hidden = false;
                 return;
             }
@@ -533,31 +539,125 @@
             question.status = question.userAnswer ? STATUS.ANSWERING : STATUS.UNANSWERED;
         }
 
-        function normalizeSearchValue(value) {
-            return String(value || '').replace(/\s+/g, ' ').trim().toLowerCase();
+        function normalizeSearchText(value) {
+            return String(value || '')
+                .replace(/\s+/g, ' ')
+                .toLowerCase()
+                .trim();
         }
 
-        function getQuestionSearchText(question) {
-            const optionText = (question.options || []).map(function (option) {
-                return option.text;
-            }).join(' ');
-            return normalizeSearchValue([
+        function getSearchHaystack(question) {
+            return normalizeSearchText([
+                question.id,
+                TYPE_LABELS[question.type],
+                question.sourceSheet,
+                question.sourceNo,
+                question.caseNo,
                 question.caseStem,
                 question.question,
-                optionText
-            ].join(' '));
+                question.answer,
+                question.difficulty,
+                question.category,
+                question.keywords,
+                question.specialty,
+                question.isLifeSaving ? '保命题' : '',
+                (question.options || []).map(function (option) {
+                    return option.letter + ' ' + option.text;
+                }).join(' '),
+                question.explanation
+            ].filter(Boolean).join(' '));
         }
 
-        function matchesSearchQuery(question) {
-            const query = normalizeSearchValue(state.filters.query);
+        function updateSearchResults() {
+            const query = normalizeSearchText(dom.questionSearchInput.value);
+            state.searchQuery = query;
+
             if (!query) {
-                return true;
+                state.searchResults = [];
+                renderSearchResults();
+                return;
             }
-            const terms = query.split(' ').filter(Boolean);
-            const searchText = getQuestionSearchText(question);
-            return terms.every(function (term) {
-                return searchText.includes(term);
+
+            const terms = query.split(/\s+/).filter(Boolean);
+            state.searchResults = state.sourceQuestions.filter(function (question) {
+                const haystack = getSearchHaystack(question);
+                return terms.every(function (term) {
+                    return haystack.includes(term);
+                });
             });
+            renderSearchResults();
+        }
+
+        function clearSearch() {
+            dom.questionSearchInput.value = '';
+            state.searchQuery = '';
+            state.searchResults = [];
+            renderSearchResults();
+            dom.questionSearchInput.focus();
+        }
+
+        function renderSearchResults() {
+            dom.searchResults.innerHTML = '';
+
+            if (!state.searchQuery) {
+                dom.searchSummary.textContent = '输入关键词后显示匹配题目。';
+                return;
+            }
+
+            const total = state.searchResults.length;
+            const visibleResults = state.searchResults.slice(0, SEARCH_RESULT_LIMIT);
+            dom.searchSummary.textContent = total === 0
+                ? '没有找到匹配题目。'
+                : '找到 ' + total + ' 道题，显示前 ' + visibleResults.length + ' 道。';
+
+            visibleResults.forEach(function (question) {
+                const button = document.createElement('button');
+                button.type = 'button';
+                button.className = 'search-result';
+                button.innerHTML = [
+                    '<div class="search-result-title">',
+                    '题库第 ' + escapeHtml(question.id) + ' 题',
+                    '<span>' + escapeHtml(TYPE_LABELS[question.type] || '题目') + '</span>',
+                    question.isLifeSaving ? '<span>保命题</span>' : '',
+                    question.category ? '<span>' + escapeHtml(question.category) + '</span>' : '',
+                    '</div>',
+                    '<div class="search-result-text">' + escapeHtml(getSearchResultText(question)) + '</div>',
+                    '<div class="search-result-meta">' + escapeHtml([question.sourceSheet + ' ' + question.sourceNo, question.keywords].filter(Boolean).join(' · ')) + '</div>'
+                ].join('');
+                button.addEventListener('click', function () {
+                    goToSearchResult(question.id);
+                });
+                dom.searchResults.appendChild(button);
+            });
+        }
+
+        function getSearchResultText(question) {
+            const text = question.caseStem
+                ? question.caseStem + ' ' + question.question
+                : question.question;
+            return text.length > 150 ? text.slice(0, 150) + '...' : text;
+        }
+
+        function goToSearchResult(questionId) {
+            const index = state.sourceQuestions.findIndex(function (question) {
+                return question.id === questionId;
+            });
+            if (index < 0 || !canUseMode(MODES.PRACTICE)) {
+                return;
+            }
+
+            hideVisibleResult();
+            saveCurrentIndex();
+            state.mode = MODES.PRACTICE;
+            state.filters.lifeScope = '';
+            state.filters.unattemptedOnly = false;
+            state.filters.difficulty = '';
+            state.filters.type = '';
+            state.modeIndexes[MODES.PRACTICE] = index;
+            syncCurrentQuestions();
+            render();
+            savePracticeProgress();
+            document.querySelector('.question-shell').scrollIntoView({ behavior: 'smooth', block: 'start' });
         }
 
         function matchesPracticeFilters(question) {
@@ -577,7 +677,7 @@
             if (state.filters.type && question.type !== state.filters.type) {
                 return false;
             }
-            return matchesSearchQuery(question);
+            return true;
         }
 
         function filterPracticeQuestions(questions) {
@@ -587,7 +687,6 @@
         function hasActiveFilters() {
             return Boolean(state.filters.lifeScope) ||
                 state.filters.unattemptedOnly ||
-                Boolean(normalizeSearchValue(state.filters.query)) ||
                 Boolean(state.filters.difficulty) ||
                 Boolean(state.filters.type);
         }
@@ -876,12 +975,8 @@
         function clearPracticeFilters() {
             state.filters.lifeScope = '';
             state.filters.unattemptedOnly = false;
-            state.filters.query = '';
             state.filters.difficulty = '';
             state.filters.type = '';
-            if (dom.questionSearchInput) {
-                dom.questionSearchInput.value = '';
-            }
             if (dom.lifeFilterSelect) {
                 dom.lifeFilterSelect.value = '';
             }
@@ -1239,10 +1334,11 @@
             state.filters = {
                 lifeScope: '',
                 unattemptedOnly: false,
-                query: '',
                 difficulty: '',
                 type: ''
             };
+            state.searchQuery = '';
+            state.searchResults = [];
             if (dom.questionSearchInput) {
                 dom.questionSearchInput.value = '';
             }
@@ -1257,6 +1353,7 @@
             }
             state.exam = null;
             syncCurrentQuestions();
+            renderSearchResults();
             render();
             showToast('安规页面进度已重置', 'info');
         }
@@ -1277,6 +1374,7 @@
         function render() {
             updateModeButtons();
             renderPracticeTools();
+            renderSearchVisibility();
             renderQuestion();
             renderStats();
             renderAnswerSheet();
@@ -1292,14 +1390,10 @@
         function renderPracticeTools() {
             const enabled = state.mode !== MODES.EXAM && pageView !== PAGE_VIEWS.EXAM;
             dom.practiceTools.hidden = !enabled;
-            dom.questionSearchField.hidden = !enabled;
             if (!enabled) {
                 return;
             }
 
-            if (dom.questionSearchInput && dom.questionSearchInput.value !== state.filters.query) {
-                dom.questionSearchInput.value = state.filters.query;
-            }
             if (dom.lifeFilterSelect && dom.lifeFilterSelect.value !== state.filters.lifeScope) {
                 dom.lifeFilterSelect.value = state.filters.lifeScope;
             }
@@ -1315,6 +1409,10 @@
             dom.optionShuffleBtn.setAttribute('aria-pressed', state.optionShuffle ? 'true' : 'false');
             dom.clearFiltersBtn.hidden = !hasActiveFilters();
             dom.filterSummary.textContent = getFilterSummaryText();
+        }
+
+        function renderSearchVisibility() {
+            dom.searchSection.hidden = pageView === PAGE_VIEWS.EXAM || state.mode === MODES.EXAM;
         }
 
         function getFilterSummaryText() {
@@ -1819,10 +1917,8 @@
             dom.wrongBookBtn.addEventListener('click', toggleWrongBook);
             dom.startExamBtn.addEventListener('click', startNewExam);
             dom.resetPageBtn.addEventListener('click', resetPageProgress);
-            dom.questionSearchInput.addEventListener('input', function () {
-                state.filters.query = dom.questionSearchInput.value;
-                applyPracticeFilters();
-            });
+            dom.questionSearchInput.addEventListener('input', updateSearchResults);
+            dom.clearSearchBtn.addEventListener('click', clearSearch);
             dom.lifeFilterSelect.addEventListener('change', function () {
                 state.filters.lifeScope = dom.lifeFilterSelect.value;
                 applyPracticeFilters();
