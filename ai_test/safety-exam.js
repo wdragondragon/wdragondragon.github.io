@@ -312,7 +312,7 @@
             difficultyFilterSelect: document.getElementById('difficultyFilterSelect'),
             typeFilterSelect: document.getElementById('typeFilterSelect'),
             optionShuffleBtn: document.getElementById('optionShuffleBtn'),
-            hideAnswerOnSwitchBtn: document.getElementById('hideAnswerOnSwitchBtn'),
+            memorizeModeBtn: document.getElementById('memorizeModeBtn'),
             unattemptedFilterBtn: document.getElementById('unattemptedFilterBtn'),
             clearFiltersBtn: document.getElementById('clearFiltersBtn'),
             filterSummary: document.getElementById('filterSummary'),
@@ -385,7 +385,7 @@
             exam: null,
             timerId: null,
             optionShuffle: false,
-            hideAnswerOnSwitch: true,
+            memorizeMode: false,
             visibleResultKey: null
         };
 
@@ -485,7 +485,7 @@
             return state.mode !== MODES.EXAM &&
                 Boolean(question) &&
                 isResultStatus(question.status) &&
-                (!state.hideAnswerOnSwitch || state.visibleResultKey === getQuestionKey(question));
+                (state.memorizeMode || state.visibleResultKey === getQuestionKey(question));
         }
 
         function isCommittedAnswerHidden(question) {
@@ -707,7 +707,7 @@
                 modeIndexes: state.modeIndexes,
                 randomOrder: state.randomOrder,
                 optionShuffle: state.optionShuffle,
-                hideAnswerOnSwitch: state.hideAnswerOnSwitch,
+                memorizeMode: state.memorizeMode,
                 questions: state.sourceQuestions
                     .filter(function (question) {
                         return question.userAnswer || question.status !== STATUS.UNANSWERED || question.isWrongBook;
@@ -743,8 +743,8 @@
                     });
                 }
                 state.optionShuffle = Boolean(saved.optionShuffle);
-                if (typeof saved.hideAnswerOnSwitch === 'boolean') {
-                    state.hideAnswerOnSwitch = saved.hideAnswerOnSwitch;
+                if (typeof saved.memorizeMode === 'boolean') {
+                    state.memorizeMode = saved.memorizeMode;
                 }
                 if (Array.isArray(saved.questions)) {
                     saved.questions.forEach(function (progress) {
@@ -1336,7 +1336,7 @@
             };
             state.randomOrder = [];
             state.optionShuffle = false;
-            state.hideAnswerOnSwitch = true;
+            state.memorizeMode = false;
             state.visibleResultKey = null;
             state.filters = {
                 lifeScope: '',
@@ -1369,11 +1369,14 @@
             if (!question) {
                 return false;
             }
-            if (isQuestionRetrying(question)) {
-                return false;
-            }
             if (state.mode === MODES.EXAM) {
                 return Boolean(state.exam && state.exam.submitted);
+            }
+            if (state.memorizeMode) {
+                return true;
+            }
+            if (isQuestionRetrying(question)) {
+                return false;
             }
             return isQuestionResultVisible(question);
         }
@@ -1414,11 +1417,11 @@
             dom.unattemptedFilterBtn.setAttribute('aria-pressed', state.filters.unattemptedOnly ? 'true' : 'false');
             dom.optionShuffleBtn.classList.toggle('active', state.optionShuffle);
             dom.optionShuffleBtn.setAttribute('aria-pressed', state.optionShuffle ? 'true' : 'false');
-            dom.hideAnswerOnSwitchBtn.classList.toggle('active', state.hideAnswerOnSwitch);
-            dom.hideAnswerOnSwitchBtn.setAttribute('aria-pressed', state.hideAnswerOnSwitch ? 'true' : 'false');
-            dom.hideAnswerOnSwitchBtn.innerHTML = state.hideAnswerOnSwitch
-                ? '<i class="fas fa-eye-slash"></i> 切题隐藏答案'
-                : '<i class="fas fa-eye"></i> 切题显示答案';
+            dom.memorizeModeBtn.classList.toggle('active', state.memorizeMode);
+            dom.memorizeModeBtn.setAttribute('aria-pressed', state.memorizeMode ? 'true' : 'false');
+            dom.memorizeModeBtn.innerHTML = state.memorizeMode
+                ? '<i class="fas fa-eye"></i> 记题模式'
+                : '<i class="fas fa-brain"></i> 记题模式';
             dom.clearFiltersBtn.hidden = !hasActiveFilters();
             dom.filterSummary.textContent = getFilterSummaryText();
         }
@@ -1677,6 +1680,9 @@
                 }
                 return '非保命题只有 1 次机会，交卷后统一发布成绩和解析。';
             }
+            if (state.memorizeMode) {
+                return '记题模式已开启，正确答案和解析会直接显示。';
+            }
             if (isQuestionRetrying(question)) {
                 return '正在重新答题，提交前不显示上次答案。';
             }
@@ -1841,9 +1847,9 @@
             });
             dom.sheetLegend.textContent = state.mode === MODES.EXAM && state.exam && !state.exam.submitted
                 ? '蓝色表示已作答，交卷后显示对错。'
-                : (state.hideAnswerOnSwitch
-                    ? '提交后当前题显示对错，切换后蓝色表示已作答。'
-                    : '提交后显示对错，切换题目也保留答案。');
+                : (state.memorizeMode
+                    ? '记题模式已开启，未作答题目也显示正确答案。'
+                    : '提交后当前题显示对错，切换后蓝色表示已作答。');
         }
 
         function getSheetStatus(question) {
@@ -1954,8 +1960,8 @@
                 savePracticeProgress();
                 render();
             });
-            dom.hideAnswerOnSwitchBtn.addEventListener('click', function () {
-                state.hideAnswerOnSwitch = !state.hideAnswerOnSwitch;
+            dom.memorizeModeBtn.addEventListener('click', function () {
+                state.memorizeMode = !state.memorizeMode;
                 savePracticeProgress();
                 render();
             });
